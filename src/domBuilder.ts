@@ -1,11 +1,11 @@
-type CreateElementArg<E extends HTMLElement> = HTMLElement | string | Array<HTMLElement> | Partial<E>
+type CreateElementArg<E extends HTMLElement> = HTMLElement | string | Array<HTMLElement> | Partial<E> | Text
 type CreateElementArgs<E extends HTMLElement> = CreateElementArg<E>[]
 
 function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateElementArgs<E>) {
   args.forEach(arg => {
     if (Array.isArray(arg)) {
       addItems(element, arg)
-    } else if (arg instanceof HTMLElement) {
+    } else if (arg instanceof HTMLElement || arg instanceof Text) {
       element.appendChild(arg)
     } else if (typeof arg === 'string') {
       element.appendChild(document.createTextNode(arg))
@@ -21,7 +21,6 @@ function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateEl
       })
     }
   })
-
 }
 
 function createElement<E extends HTMLElement>(tagNameOrElement: keyof HTMLElementTagNameMap, ...args: CreateElementArgs<E>): E {
@@ -145,9 +144,12 @@ export const varE = createElementFn<HTMLElement>('var')
 export const video = createElementFn<HTMLVideoElement>('video')
 export const wbr = createElementFn<HTMLElement>('wbr')
 
+// Other Nodes
+
+export const text = (arg: any = '') => document.createTextNode(arg)
 
 // Render function that appends generated elements to the target element
-export function render(targetId: string, element: HTMLElement) {
+export function setElementToId(targetId: string, element: HTMLElement) {
   const targetElement = document.getElementById(targetId)
   if (targetElement) {
     targetElement.replaceChildren(element)

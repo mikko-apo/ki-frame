@@ -1,4 +1,17 @@
-import {a, p, render} from "./domBuilder";
+import {p, setElementToId, text} from "./domBuilder";
+import {createState} from "./state";
 
-let a1 = a("test link", {href: "/pow.html"});
-render('app', p("POW!", a1, { onclick: () => console.log("pow.html")}));
+function getBody() {
+  const state = createState({total: 0})
+  const t = text()
+  state.onChange(obj => t.nodeValue = `${obj.total}`)
+  // renders content with with state.onChange()
+  state.refresh();
+  return p(
+    "Total: ",
+    t,
+    {onclick: () => state.modify(cur => ({total: cur.total + 1}))}
+  );
+}
+
+setElementToId('app', getBody());
