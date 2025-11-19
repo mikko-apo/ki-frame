@@ -1,72 +1,29 @@
-export interface State<T extends any> {
-  get(): T;
-
-  set(newObj: T): void;
-
-  modify(fn: (cur: T) => T): void;
-
-  /** Trigger onChange() for all subscribers. Useful for initial paint. **/
-  refresh(): void;
-
-  /** Called whenever the state object changes. Returns an unsubscribe function. */
-  onChange(cb: (obj: T, old: T) => void): () => void;
-
-  /** Notify onDestroy() subscribers and call .destroy() for all attached states.
-   * For an attached state also removes the state from parent.
-   * Safe to call multiple times.
-   **/
-  destroy(): void;
-
-  /** Called when destroy() is invoked. Returns an unsubscribe function. */
-  onDestroy(cb: () => void): () => void;
-
-  /** Create an attached state which will be destroyed when this state is destroyed. */
-  createAttachedState<U>(initial: U, name?: string): State<U>;
-}
+import { Channel, type Unsub } from "./channel";
+import type { Destroyable, State } from "./types";
 
 type ChangeCb<T> = (obj: T, old: T) => void;
 type DestroyCb = () => void;
 
-function shallowEqual(a: any, b: any) {
+function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-let nextUnnamedId = 0;
-
-export function createState<T>(initialStateObject: T): State<T> {
-  let value: T = initialStateObject;
+export function createState<Value>(initialStateObject: Value): State<Value> {
+  let value: Value = initialStateObject;
   let destroyed = false;
 
-  const changeSubscribers = new Set<ChangeCb<T>>();
-  const destroySubscribers = new Set<DestroyCb>();
-  const attachedStates = new Map<string, State<any>>();
+  const onChange = new Channel<[Value, Value]>("onChange");
+  const onDestroy = new Channel<[]>("onDestroy");
+  const destroyables = new Set<Destroyable>();
 
-  function notifyChange(newV: T, oldV: T) {
-    for (const cb of Array.from(changeSubscribers)) {
-      try {
-        cb(newV, oldV);
-      } catch (err) {
-        console.error("Error in onChange handler:", err);
-      }
-    }
-  }
-
-  function notifyDestroy() {
-    for (const cb of Array.from(destroySubscribers)) {
-      try {
-        cb();
-      } catch (err) {
-        console.error("Error in onDestroy handler:", err);
-      }
-    }
-  }
-
-  return {
+  const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
+  const state: State<Value> = {
     get() {
+      if (destroyed) throw new Error("State destroyed. Cannot get value");
       return value;
     },
 
-    set(newObj: T) {
+    set(newObj: Value) {
       if (destroyed) throw new Error("State destroyed. Cannot set value");
       const old = value;
       if (shallowEqual(old, newObj)) return;
@@ -74,72 +31,62 @@ export function createState<T>(initialStateObject: T): State<T> {
       notifyChange(value, old);
     },
 
-    modify(fn: (cur: T) => T) {
+    modify(fn: (cur: Value) => Value) {
       if (destroyed) throw new Error("State destroyed. Cannot modify");
       const next = fn(value);
-      this.set(next);
+      state.set(next);
     },
 
     refresh() {
-      notifyChange(value, value)
+      notifyChange(value, value);
     },
 
-    onChange(cb: ChangeCb<T>) {
+    onChange(cb: ChangeCb<Value>): Unsub {
       if (destroyed) throw new Error("Cannot subscribe to destroyed state");
-      changeSubscribers.add(cb);
-      return () => changeSubscribers.delete(cb);
+      return onChange.subscribe(cb);
+    },
+    onDestroy(cb: DestroyCb): Unsub {
+      if (destroyed) {
+        // If already destroyed, call immediately (consistent behavior) and return no-op unsubscribe.
+        cb();
+        return () => {};
+      }
+      return onDestroy.subscribe(cb);
     },
 
+    addToDestroy(target: Destroyable): Unsub {
+      if (destroyed) {
+        target.destroy();
+        return () => {};
+      }
+      destroyables.add(target);
+      return () => destroyables.delete(target);
+    },
+    addToParentDestroy<T>(parent: State<T>): Unsub {
+      return state.onDestroy(parent.addToDestroy(state));
+    },
+
+    /** Notify onDestroy() subscribers and call .destroy() for all attached states.
+     * For an attached state also removes the state from parent.
+     * Safe to call multiple times.
+     **/
     destroy() {
       if (destroyed) return;
       destroyed = true;
-
-      // Destroy attachedStates (make a copy first)
-      for (const [name, dep] of Array.from(attachedStates.entries())) {
+      // Notify own destroy subscribers
+      onDestroy.publish();
+      for (const destroyable of Array.from(destroyables)) {
         try {
-          dep.destroy();
+          destroyable.destroy();
         } catch (err) {
-          console.error(`Error destroying attached state "${name}":`, err);
+          console.error(`Error in state.destroy()`, err);
         }
-        attachedStates.delete(name);
       }
-
-      // Notify destroy subscribers
-      notifyDestroy();
-
       // Clear subscribers to help GC
-      changeSubscribers.clear();
-      destroySubscribers.clear();
-    },
-
-    onDestroy(cb: DestroyCb) {
-      if (destroyed) {
-        // If already destroyed, call immediately (consistent behavior) and return no-op unsubscribe.
-        try {
-          cb();
-        } catch (err) {
-          console.error("Error in immediate onDestroy callback:", err);
-        }
-        return () => {
-        };
-      }
-      destroySubscribers.add(cb);
-      return () => destroySubscribers.delete(cb);
-    },
-
-    createAttachedState<U>(initial: U, name?: string): State<U> {
-      if (destroyed) throw new Error("State destroyed. Cannot attach new state");
-      const key = name ?? `state_${++nextUnnamedId}`;
-      if (attachedStates.has(key)) throw new Error(`Attached state with name "${key}" already exists`);
-      const newState = createState(initial);
-
-      // When attached state is destroyed directly, remove it from parent's map to avoid memory leaks.
-      newState.onDestroy(() => {
-        attachedStates.delete(key);
-      });
-
-      attachedStates.set(key, newState);
-      return newState;
+      destroyables.clear();
+      onChange.destroy();
+      onDestroy.destroy();
     },
   };
+  return state;
 }
