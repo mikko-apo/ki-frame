@@ -1,5 +1,6 @@
 // utils
 import type { Destroyable } from "./types";
+import {createId} from "./util";
 
 type MaybeTuple<T> = T extends any[] ? T : T extends void ? [] : [T];
 type SubscriberFor<P extends any[]> = (...args: P) => void | Promise<void>;
@@ -11,11 +12,12 @@ export type Unsub = () => void;
  * - subscribers may be sync or async (return void or Promise<void>)
  */
 export class Channel<P extends any[] = []> implements Destroyable {
-  readonly name: string;
+  readonly id: string;
   private subs = new Set<SubscriberFor<P>>();
+  private idTxt = (txt: string) => `${this.id}: ${txt}`;
 
   constructor(name: string) {
-    this.name = name;
+    this.id = createId(name);
   }
 
   subscribe(fn: SubscriberFor<P>): Unsub {
@@ -46,15 +48,12 @@ export class Channel<P extends any[] = []> implements Destroyable {
 
   // synchronous publish — invokes handlers and doesn't wait for Promises
   publish(...args: P): void {
-    console.log(`channel ${this.name} publish`, this.subs);
     for (const fn of Array.from(this.subs)) {
       // call and intentionally ignore returned Promise
       try {
-        console.log(`channel ${this.name} publish calling fn`, fn);
         fn(...args);
-        console.log(`channel ${this.name} publish returned`);
       } catch (err) {
-        console.error(`Error in channel.publish() for '${this.name}':`, err);
+        console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err);
       }
     }
   }

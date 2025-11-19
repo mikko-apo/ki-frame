@@ -97,7 +97,6 @@ function demolist(demos: Demo[]) {
     });
     return tr(td(launchDemo), target);
   }, demo);
-  console.log("rows", rows);
   return table(rows);
 }
 
