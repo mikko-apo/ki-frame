@@ -31,20 +31,13 @@ export class Channel<P extends any[] = []> implements Destroyable {
 
   // subscribe once: handler auto-unsubscribe after first invocation
   once(fn: SubscriberFor<P>): Unsub {
+    const unsub = () => this.subs.delete(wrapper);
     const wrapper: SubscriberFor<P> = (...args) => {
-      try {
-        const r = fn(...args);
-        // If handler returns Promise, ensure unsubscribe happens immediately (before awaiting)
-        return r instanceof Promise
-          ? r.finally(() => this.subs.delete(wrapper))
-          : (this.subs.delete(wrapper), undefined);
-      } finally {
-        // In case fn throws synchronously
-        this.subs.delete(wrapper);
-      }
+      unsub();
+      fn(...args);
     };
     this.subs.add(wrapper);
-    return () => this.subs.delete(wrapper);
+    return unsub;
   }
 
   unsubscribe(fn: SubscriberFor<P>): void {
