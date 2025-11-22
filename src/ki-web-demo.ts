@@ -15,7 +15,7 @@ interface Demo {
 const demo = (title: string, fn: () => HTMLElement) => ({ title, fn });
 
 const demos: Demo[] = [
-  demo("counter", () => {
+  demo("counter(), naive 2010 DOM node version", () => {
     const state = createState({ total: 0 });
 
     function infoText(state: State<Total>) {
@@ -29,6 +29,26 @@ const demos: Demo[] = [
     return p("Total: ", infoText(state), {
       onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
     });
+  }),
+  demo("testable counter", () => {
+    // DOM structure setup for testing
+    const createNodes = () => {
+      const info = text();
+      const root = p("Click to update counter", info);
+      return { info, root };
+    };
+
+    function counter(state = createState({ total: 0 })) {
+      const nodes = createNodes();
+      // connect subscribers
+      nodes.root.onclick = () => state.modify((cur) => ({ total: cur.total + 1 }));
+      state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
+      // render content with state.refresh()
+      state.refresh();
+      return nodes;
+    }
+
+    return counter().root;
   }),
   demo("onDestroyDemo", () => {
     const state = createState({ total: 123 });

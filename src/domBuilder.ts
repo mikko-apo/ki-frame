@@ -13,12 +13,12 @@ function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateEl
   args.forEach((arg) => {
     if (Array.isArray(arg)) {
       addItems(element, ...arg);
-    } else if (arg instanceof HTMLElement || arg instanceof Text) {
+    } else if (isNode(arg)) {
       element.appendChild(arg);
     } else if (arg instanceof WrappedNode) {
       element.appendChild(arg.node);
     } else if (typeof arg === "string") {
-      element.appendChild(document.createTextNode(arg));
+      element.appendChild(getDocument().createTextNode(arg));
     } else if (typeof arg === "object") {
       Object.keys(arg).forEach((key) => {
         const argValue = (arg as any)[key];
@@ -33,11 +33,28 @@ function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateEl
   });
 }
 
+var doc: Document | undefined = typeof document !== "undefined" ? document : undefined;
+var isNode = (e: unknown): e is Node => {
+  return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
+};
+
+export function setCreateElementContext(newDoc: Document, newIsNode: typeof isNode) {
+  doc = newDoc;
+  isNode = newIsNode;
+}
+
+function getDocument() {
+  if (doc) {
+    return doc;
+  }
+  throw new Error("document is undefined");
+}
+
 function createElement<E extends HTMLElement>(
   tagNameOrElement: keyof HTMLElementTagNameMap,
   ...args: CreateElementArgs<E>
 ): E {
-  const element = document.createElement(tagNameOrElement);
+  const element = getDocument().createElement(tagNameOrElement);
   addItems<E>(element, ...args);
   return element as E;
 }
@@ -162,11 +179,11 @@ export const wbr = createElementFn<HTMLElement>("wbr");
 
 // Other Nodes
 
-export const text = (arg: string | number = "") => document.createTextNode(String(arg));
+export const text = (arg: string | number = "") => getDocument().createTextNode(String(arg));
 
 // Render function that appends generated elements to the target element
 export function setElementToId(targetId: string, element: HTMLElement) {
-  const targetElement = document.getElementById(targetId);
+  const targetElement = getDocument().getElementById(targetId);
   if (targetElement) {
     targetElement.replaceChildren(element);
   } else {

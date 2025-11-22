@@ -103,7 +103,7 @@ export class ChannelRegistry<Spec extends Record<string, any>> implements Destro
     return ch;
   }
 
- public destroy(): void {
+  public destroy(): void {
     for (const ch of this.map.values()) ch.destroy();
     this.map.clear();
   }
