@@ -10,7 +10,7 @@ function shallowEqual(a: unknown, b: unknown) {
 }
 
 export function createState<Value>(initialStateObject: Value, options?: { name?: string }): State<Value> {
-  const { name = "state" } = options ?? {}
+  const { name = "state" } = options ?? {};
   const id = createId(name);
   let value: Value = initialStateObject;
   let destroyed = false;

@@ -1,6 +1,6 @@
 // utils
 import type { Destroyable } from "./types";
-import {createId} from "./util";
+import { createId } from "./util";
 
 type MaybeTuple<T> = T extends any[] ? T : T extends void ? [] : [T];
 type SubscriberFor<P extends any[]> = (...args: P) => void | Promise<void>;
@@ -23,7 +23,7 @@ export class Channel<P extends any[] = []> implements Destroyable {
   subscribe(fn: SubscriberFor<P>): Unsub {
     this.subs.add(fn);
     return () => {
-      this.subs.delete(fn);
+      this.unsubscribe(fn);
     };
   }
 
@@ -33,7 +33,7 @@ export class Channel<P extends any[] = []> implements Destroyable {
 
   // subscribe once: handler auto-unsubscribe after first invocation
   once(fn: SubscriberFor<P>): Unsub {
-    const unsub = () => this.subs.delete(wrapper);
+    const unsub = () => this.unsubscribe(wrapper);
     const wrapper: SubscriberFor<P> = (...args) => {
       unsub();
       fn(...args);
@@ -103,42 +103,7 @@ export class ChannelRegistry<Spec extends Record<string, any>> implements Destro
     return ch;
   }
 
-  subscribe<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): Unsub {
-    return this.get(name).subscribe(fn);
-  }
-
-  once<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): Unsub {
-    return this.get(name).once(fn);
-  }
-
-  subscribeFnForType<K extends keyof Spec>(name: K): (fn: SubscriberFor<MaybeTuple<Spec[K]>>) => Unsub {
-    return (fn) => this.subscribe(name, fn);
-  }
-
-  unsubscribe<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): void {
-    this.get(name).unsubscribe(fn);
-  }
-
-  publish<K extends keyof Spec>(name: K, ...args: MaybeTuple<Spec[K]>): void {
-    const ch = this.map.get(name);
-    if (!ch) return;
-    (ch as Channel<MaybeTuple<Spec[K]>>).publish(...args);
-  }
-
-  async publishAsync<K extends keyof Spec>(name: K, ...args: MaybeTuple<Spec[K]>): Promise<void> {
-    const ch = this.map.get(name);
-    if (!ch) return;
-    await (ch as Channel<MaybeTuple<Spec[K]>>).publishAsync(...args);
-  }
-
-  // clear either a single channel or everything
-  clear(name: keyof Spec): void {
-    const ch = this.map.get(name);
-    ch?.destroy();
-    this.map.delete(name);
-  }
-
-  public destroy(): void {
+ public destroy(): void {
     for (const ch of this.map.values()) ch.destroy();
     this.map.clear();
   }
