@@ -1,4 +1,12 @@
-type CreateElementArg<E extends HTMLElement> = HTMLElement | string | Array<HTMLElement> | Partial<E> | Text;
+import { WrappedNode } from "./types";
+
+type CreateElementArg<E extends HTMLElement> =
+  | HTMLElement
+  | string
+  | Array<HTMLElement>
+  | Partial<E>
+  | Text
+  | WrappedNode;
 type CreateElementArgs<E extends HTMLElement> = CreateElementArg<E>[];
 
 function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateElementArgs<E>) {
@@ -7,6 +15,8 @@ function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateEl
       addItems(element, ...arg);
     } else if (arg instanceof HTMLElement || arg instanceof Text) {
       element.appendChild(arg);
+    } else if (arg instanceof WrappedNode) {
+      element.appendChild(arg.node);
     } else if (typeof arg === "string") {
       element.appendChild(document.createTextNode(arg));
     } else if (typeof arg === "object") {

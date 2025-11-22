@@ -63,6 +63,7 @@ const demos: Demo[] = [
   demo("channelsDemo", () => {
     const state = createState({ total: 0 });
     const channels = new ChannelRegistry<{ test: { num: number } }>();
+    const channel = channels.get("test");
     let num = 0;
 
     state.onDestroy(() => {
@@ -70,7 +71,7 @@ const demos: Demo[] = [
       t1.nodeValue = "T1, not destroyed!";
     });
 
-    channels.subscribe("test", (payload) => {
+    channel.subscribe((payload) => {
       t1.nodeValue = `Counter ${payload.num}`;
     });
 
@@ -79,7 +80,7 @@ const demos: Demo[] = [
     const t1 = text("T1");
     const root = p(
       p("Click me to send message!", {
-        onclick: () => channels.publish("test", { num: num++ }),
+        onclick: () => channel.publish({ num: num++ }),
       }),
       t1,
     );
