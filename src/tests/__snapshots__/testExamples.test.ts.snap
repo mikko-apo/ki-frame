@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Example tests > connected counter() and root.click() 1`] = `
+<p>
+  Click to update counter
+  Counter: 0
+</p>
+`;
+
+exports[`Example tests > connected counter() and root.click() 2`] = `
+<p>
+  Click to update counter
+  Counter: 1
+</p>
+`;

@@ -27,3 +27,15 @@ export interface State<T> extends Destroyable {
 
   addToParentDestroy<T>(parent: State<T>): Unsub;
 }
+
+export class WrappedNode {
+  private _node: Node;
+
+  constructor(node: Node) {
+    this._node = node;
+  }
+
+  public get node(): Node {
+    return this._node;
+  }
+}

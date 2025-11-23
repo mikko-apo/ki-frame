@@ -1,5 +1,6 @@
 // utils
 import type { Destroyable } from "./types";
+import { createId } from "./util";
 
 type MaybeTuple<T> = T extends any[] ? T : T extends void ? [] : [T];
 type SubscriberFor<P extends any[]> = (...args: P) => void | Promise<void>;
@@ -11,17 +12,18 @@ export type Unsub = () => void;
  * - subscribers may be sync or async (return void or Promise<void>)
  */
 export class Channel<P extends any[] = []> implements Destroyable {
-  readonly name: string;
+  readonly id: string;
   private subs = new Set<SubscriberFor<P>>();
+  private idTxt = (txt: string) => `${this.id}: ${txt}`;
 
   constructor(name: string) {
-    this.name = name;
+    this.id = createId(name);
   }
 
   subscribe(fn: SubscriberFor<P>): Unsub {
     this.subs.add(fn);
     return () => {
-      this.subs.delete(fn);
+      this.unsubscribe(fn);
     };
   }
 
@@ -31,20 +33,13 @@ export class Channel<P extends any[] = []> implements Destroyable {
 
   // subscribe once: handler auto-unsubscribe after first invocation
   once(fn: SubscriberFor<P>): Unsub {
+    const unsub = () => this.unsubscribe(wrapper);
     const wrapper: SubscriberFor<P> = (...args) => {
-      try {
-        const r = fn(...args);
-        // If handler returns Promise, ensure unsubscribe happens immediately (before awaiting)
-        return r instanceof Promise
-          ? r.finally(() => this.subs.delete(wrapper))
-          : (this.subs.delete(wrapper), undefined);
-      } finally {
-        // In case fn throws synchronously
-        this.subs.delete(wrapper);
-      }
+      unsub();
+      fn(...args);
     };
     this.subs.add(wrapper);
-    return () => this.subs.delete(wrapper);
+    return unsub;
   }
 
   unsubscribe(fn: SubscriberFor<P>): void {
@@ -53,15 +48,12 @@ export class Channel<P extends any[] = []> implements Destroyable {
 
   // synchronous publish — invokes handlers and doesn't wait for Promises
   publish(...args: P): void {
-    console.log(`channel ${this.name} publish`, this.subs);
     for (const fn of Array.from(this.subs)) {
       // call and intentionally ignore returned Promise
       try {
-        console.log(`channel ${this.name} publish calling fn`, fn);
         fn(...args);
-        console.log(`channel ${this.name} publish returned`);
       } catch (err) {
-        console.error(`Error in channel.publish() for '${this.name}':`, err);
+        console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err);
       }
     }
   }
@@ -109,41 +101,6 @@ export class ChannelRegistry<Spec extends Record<string, any>> implements Destro
       this.map.set(name, ch);
     }
     return ch;
-  }
-
-  subscribe<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): Unsub {
-    return this.get(name).subscribe(fn);
-  }
-
-  once<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): Unsub {
-    return this.get(name).once(fn);
-  }
-
-  subscribeFnForType<K extends keyof Spec>(name: K): (fn: SubscriberFor<MaybeTuple<Spec[K]>>) => Unsub {
-    return (fn) => this.subscribe(name, fn);
-  }
-
-  unsubscribe<K extends keyof Spec>(name: K, fn: SubscriberFor<MaybeTuple<Spec[K]>>): void {
-    this.get(name).unsubscribe(fn);
-  }
-
-  publish<K extends keyof Spec>(name: K, ...args: MaybeTuple<Spec[K]>): void {
-    const ch = this.map.get(name);
-    if (!ch) return;
-    (ch as Channel<MaybeTuple<Spec[K]>>).publish(...args);
-  }
-
-  async publishAsync<K extends keyof Spec>(name: K, ...args: MaybeTuple<Spec[K]>): Promise<void> {
-    const ch = this.map.get(name);
-    if (!ch) return;
-    await (ch as Channel<MaybeTuple<Spec[K]>>).publishAsync(...args);
-  }
-
-  // clear either a single channel or everything
-  clear(name: keyof Spec): void {
-    const ch = this.map.get(name);
-    ch?.destroy();
-    this.map.delete(name);
   }
 
   public destroy(): void {

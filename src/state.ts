@@ -1,5 +1,6 @@
 import { Channel, type Unsub } from "./channel";
 import type { Destroyable, State } from "./types";
+import { createId } from "./util";
 
 type ChangeCb<T> = (obj: T, old: T) => void;
 type DestroyCb = () => void;
@@ -8,23 +9,26 @@ function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-export function createState<Value>(initialStateObject: Value): State<Value> {
+export function createState<Value>(initialStateObject: Value, options?: { name?: string }): State<Value> {
+  const { name = "state" } = options ?? {};
+  const id = createId(name);
   let value: Value = initialStateObject;
   let destroyed = false;
 
-  const onChange = new Channel<[Value, Value]>("onChange");
-  const onDestroy = new Channel<[]>("onDestroy");
+  const onChange = new Channel<[Value, Value]>(`${id}-onChange`);
+  const onDestroy = new Channel<[]>(`${id}-onDestroy`);
   const destroyables = new Set<Destroyable>();
 
   const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
+  const idTxt = (txt: string) => `${id}: ${txt}`;
   const state: State<Value> = {
     get() {
-      if (destroyed) throw new Error("State destroyed. Cannot get value");
+      if (destroyed) throw new Error(idTxt("State destroyed. Cannot get value"));
       return value;
     },
 
     set(newObj: Value) {
-      if (destroyed) throw new Error("State destroyed. Cannot set value");
+      if (destroyed) throw new Error(idTxt("State destroyed. Cannot set value"));
       const old = value;
       if (shallowEqual(old, newObj)) return;
       value = newObj;
@@ -32,7 +36,7 @@ export function createState<Value>(initialStateObject: Value): State<Value> {
     },
 
     modify(fn: (cur: Value) => Value) {
-      if (destroyed) throw new Error("State destroyed. Cannot modify");
+      if (destroyed) throw new Error(idTxt("State destroyed. Cannot modify"));
       const next = fn(value);
       state.set(next);
     },
@@ -42,7 +46,7 @@ export function createState<Value>(initialStateObject: Value): State<Value> {
     },
 
     onChange(cb: ChangeCb<Value>): Unsub {
-      if (destroyed) throw new Error("Cannot subscribe to destroyed state");
+      if (destroyed) throw new Error(idTxt("Cannot subscribe to destroyed state"));
       return onChange.subscribe(cb);
     },
     onDestroy(cb: DestroyCb): Unsub {
@@ -79,7 +83,7 @@ export function createState<Value>(initialStateObject: Value): State<Value> {
         try {
           destroyable.destroy();
         } catch (err) {
-          console.error(`Error in state.destroy()`, err);
+          console.error(idTxt(`Error in state.destroy()`), err);
         }
       }
       // Clear subscribers to help GC

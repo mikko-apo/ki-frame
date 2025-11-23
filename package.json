@@ -8,12 +8,17 @@
     "bundle": "esbuild src/ki-web-demo.ts --bundle --outfile=dist/ki-web-demo.js --platform=browser --target=es2019",
     "build": "npm run typecheck && npm run bundle",
     "dev": "tsc -w -p .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "test": "vitest",
+    "test-console": "vitest --disableConsoleIntercept=false"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.6",
+    "@types/jsdom": "^27.0.0",
     "esbuild": "0.27.0",
+    "jsdom": "^27.2.0",
     "rimraf": "6.1.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }
