@@ -1,7 +1,7 @@
-import { ChannelRegistry } from "./channel";
-import { button, p, setElementToId, table, td, text, tr } from "./domBuilder";
-import { createState } from "./state";
-import type { State } from "./types";
+import {ChannelRegistry} from "./channel";
+import {button, p, setElementToId, table, td, text, tr} from "./domBuilder";
+import {createState} from "./state";
+import type {State} from "./types";
 
 interface Total {
   total: number;
@@ -12,22 +12,22 @@ interface Demo {
   fn: () => HTMLElement;
 }
 
-const demo = (title: string, fn: () => HTMLElement) => ({ title, fn });
+const demo = (title: string, fn: () => HTMLElement) => ({title, fn});
 
 const demos: Demo[] = [
   demo("counter(), naive 2010 DOM node version", () => {
-    const state = createState({ total: 0 });
+    const state = createState({total: 0});
 
     function infoText(state: State<Total>) {
       const t = text();
-      state.onChange((obj) => (t.nodeValue = `${obj.total}`));
+      state.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
       return t;
     }
 
     // renders initial content by triggering state.onChange() subscribers
     state.refresh();
     return p("Total: ", infoText(state), {
-      onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
+      onclick: () => state.modify((cur) => ({total: cur.total + 1})),
     });
   }),
   demo("testable counter", () => {
@@ -35,14 +35,17 @@ const demos: Demo[] = [
     const createNodes = () => {
       const info = text();
       const root = p("Click to update counter", info);
-      return { info, root };
+      return {info, root};
     };
 
-    function counter(state = createState({ total: 0 })) {
+    function counter(state = createState({total: 0})) {
       const nodes = createNodes();
       // connect subscribers
-      nodes.root.onclick = () => state.modify((cur) => ({ total: cur.total + 1 }));
-      state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
+      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({total: cur.total + 1})));
+      state.onValueChange((obj) => {
+        console.log(state.describe());
+        return (nodes.info.nodeValue = `Counter: ${obj.total}`);
+      });
       // render content with state.refresh()
       state.refresh();
       return nodes;
@@ -51,20 +54,20 @@ const demos: Demo[] = [
     return counter().root;
   }),
   demo("onDestroyDemo", () => {
-    const state = createState({ total: 123 });
+    const state = createState({total: 123});
     const info = (txt: string, s: State<Total>) => {
       const t = text();
-      s.onChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
+      s.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
       s.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`));
       return p(t);
     };
-    const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
+    const root = p(button("Click me!", {onclick: state.destroy}), info("1", state), info("2", state));
     state.refresh();
     return root;
   }),
   demo("onDestroyParentDemo", () => {
     const parent = createState({});
-    const state = createState({ total: 0 });
+    const state = createState({total: 0});
     state.onDestroy(() => {
       root.replaceChildren(stateInfo, parentInfo);
       stateInfo.nodeValue = "State destroyed!";
@@ -77,11 +80,11 @@ const demos: Demo[] = [
     state.refresh();
     const stateInfo = text("State ready");
     const parentInfo = text("Parent ready");
-    const root = p(p("Not destroyed. Click me!", { onclick: parent.destroy }), stateInfo, parentInfo);
+    const root = p(p("Not destroyed. Click me!", {onclick: parent.destroy}), stateInfo, parentInfo);
     return root;
   }),
   demo("channelsDemo", () => {
-    const state = createState({ total: 0 });
+    const state = createState({total: 0});
     const channels = new ChannelRegistry<{ test: { num: number } }>();
     const channel = channels.get("test");
     let num = 0;
@@ -100,7 +103,7 @@ const demos: Demo[] = [
     const t1 = text("T1");
     const root = p(
       p("Click me to send message!", {
-        onclick: () => channel.publish({ num: num++ }),
+        onclick: () => channel.publish({num: num++}),
       }),
       t1,
     );

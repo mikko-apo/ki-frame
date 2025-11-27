@@ -1,36 +1,86 @@
-do# ki-frame
+**ki-frame**
 
-Lightweight browser framework for implementing SPAs. Code with DOM elements and listeners like it's 2010 again, but with
-a functional approach.
+Lightweight but all batteries included browser framework for implementing SPAs. Code with DOM elements and listeners
+like it's 2010 again, but with better tooling.
 
 <!-- TOC -->
+
 * [Features, status and todo per feature](#features-status-and-todo-per-feature)
 * [How are you supposed to use this?](#how-are-you-supposed-to-use-this)
-  * [Use fluent syntax to create DOM trees](#use-fluent-syntax-to-create-dom-trees)
-  * [Use createState() and state.onChange()](#use-createstate-and-stateonchange)
+    * [Use fluent syntax to create DOM trees](#use-fluent-syntax-to-create-dom-trees)
+    * [Use createState() and state.onChange()](#use-createstate-and-stateonchange)
     * [How is the code linked to DOM nodes in memory?](#how-is-the-code-linked-to-dom-nodes-in-memory)
     * [How to structure code?](#how-to-structure-code)
     * [How to test?](#how-to-test)
-  * [WIP Event propagation and state data sharing](#wip-event-propagation-and-state-data-sharing-)
-    * [onRefresh](#onrefresh)
-    * [onChange](#onchange)
-    * [onDestroy](#ondestroy)
-    * [Hierarchy and grouping](#hierarchy-and-grouping)
+* [ki-frame programming model](#ki-frame-programming-model)
+    * [GC strategies](#gc-strategies)
+        * [GC related tooling](#gc-related-tooling)
+    * [State broadcast events](#state-broadcast-events)
+    * [State API](#state-api)
+    * [No external dependencies -> automatic clean up with GC](#no-external-dependencies---automatic-clean-up-with-gc)
+    * [Registered event sources and automatic cleanup on state.destroy()](#registered-event-sources-and-automatic-cleanup-on-statedestroy)
+    * [createState({}, {weakRef: true})) and state.withStrongRefs(strongRefState => {...})](#createstate-weakref-true-and-statewithstrongrefsstrongrefstate--)
+    * [Automatic cleanup](#automatic-cleanup)
+    * [Event propagation and state data sharing](#event-propagation-and-state-data-sharing)
+    * [Linked items](#linked-items)
+    * [State and DOM node life cycle events](#state-and-dom-node-life-cycle-events)
+        * [Pyramid shape for event propagation](#pyramid-shape-for-event-propagation)
+        * [Hierarchy and grouping](#hierarchy-and-grouping)
     * [Sharing state data](#sharing-state-data)
 * [TODO](#todo)
+* [References in browser apps](#references-in-browser-apps)
+    * [DOM event listeners](#dom-event-listeners)
+    * [Callback-based triggering](#callback-based-triggering)
+    * [WeakRef](#weakref)
+    * [Avoid: Top level const/let and window.state](#avoid-top-level-constlet-and-windowstate)
+* [Legend for icons](#legend-for-icons)
+
 <!-- TOC -->
 
 # Features, status and todo per feature
 
-* [domBuilder.ts](src/domBuilder.ts) - _wrapper for document.createElement() to create DOM trees fluently_
-* [state.ts](src/state.ts) - _lightweight state management_
-* validator - _lightweight zod clone for validating objects_
-    * might better to use zod
-* router - initialize application based on route parameters
+* [domBuilder.ts](src/domBuilder.ts) ✅
+    * wrapper for document.createElement() to create DOM trees fluently
+* [state.ts](src/state.ts)
+    * main concept for coordinating ki-frame components and applications
+    * maintains the state object, which is a single typed value (state.value) ✅
+    * manages input & output connections 🛠️
+        * input event listeners (DOM events, ongoing fetches and other promises, timers) 🛠️
+        * sending broadcast events to subscribed DOM nodes and linked other states 🔥
+    * logging of relevant events 🔥
+    * maintains overview of all relevant items 🛠️
+        * input listeners 🛠️ and broadcast targets 🔥
+        * links with other states 🔥
+            * with shared value
+            * linked event propagation
+        * channels
+    * supports automatic and semi-automatic removal strategies:
+        * local ✅
+            * dependencies are not shared beyond a root DOM node. GC can remove everything when the root node is removed
+              from the DOM tree.
+        * manual ✅
+            * registration + state.destroy()
+        * weakRef 🛠️
+        * onRemoveDestroy(node) - MutationObserver 🛠️
+        * GC strategy assertions
+* fetch and XHR integration 🔥
+    * state.destroy() aborts ongoing fetches and XHRs
+* form support 🔥
+    * how forms and validation should work with state?
+* router - tigher integration with browser urls ⭐
+    * initialize application based on route parameters
+    * control application url and actions based on user actions
     * port of https://github.com/mikko-apo/ki-router.js
     * work has not started
-* headless testing
-    * testing should be possible without a browser
+* testing ✅
+    * unit testing
+        * ki-frame is composed with listener functions which can be easily unit tested
+    * snapshot tests
+        * generated DOM tree
+        * updated DOM tree
+    * headless integration testing with jsdom
+        * components and even apps can be tested with jsdom.
+        * DOM events can be triggered to simulate user actions in a browser
 
 # How are you supposed to use this?
 
@@ -71,12 +121,12 @@ const createNodes = () => {
 function counter(state = createState({total: 0})) {
   const nodes = createNodes();
   nodes.root.onclick = () => state.modify((cur) => ({total: cur.total + 1}));
-  state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
+  state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
   state.refresh();
   return nodes;
 }
 
-setElementToId('app', counter());
+setElementToId('app', counter().root);
 ```
 
 Example above forms following DOM nodes:
@@ -99,40 +149,42 @@ Clicking on p increments counter with the help of the state:
     - Text node: "Click to update counter"
     - Text node: "Counter: 1"
 
-### How is the code linked to DOM nodes in memory?
+## How is the code linked to DOM nodes in memory?
 
 ```mermaid
 flowchart TD
     html["&lt;html>"] --> body["&ltbody>"] --> appDiv["&lt;div id=&quot;app&quot;>"] --> root
-    root["Root node: <b>&lt;p/></b><br>p.onclick[]: [()=> { <b>state</b>.modify(...)]"] --> title["&lt;Text node> Click to update counter"]
-    style root text-align: left
-    root --> info["<b>info</b> &lt;Text node> Counter 0"]
-    root -->|" Clicking p triggers state.modify(), which increments total "| state["<b>state</b><br>state.alue: {total: 0}<br>state.onChange[]; [(obj) => info.nodeValue = `Counter: ${obj.total}`]"]
-    state -->|" state.modify() and state.refresh() send state.value to onChange callbacks.<br>infoText node's text is updated. "| info
-    style state text-align: left
-    initCode{{"<b>Initialization code</b><br>1. creates DOM nodes and attaches callbacks<br>2. calls state.refresh() to render initial values to DOM nodes.State sends current value to onChange callbacks.<br>3.Attaches element with id 'app'"}}
+    initCode{{"<b>setElementToId('app', counter().root)</b><br>1. counter() creates counter's DOM nodes and attaches listeners<br>2. counter() calls state.refresh() to render initial values to counter's DOM nodes. State sends current value to onValueChange callbacks.<br>3. setElementToId() attaches root node to div with id 'app'"}}
     initCode -.->|" targetElement.replaceChildren(rootNode) "| appDiv
     initCode -.->|" state.refresh() "| state
     style initCode text-align: left
 
+    subgraph "<b>ki-frame counter component: DOM nodes, listeners and state</b>"
+        root["Root node: <b>&lt;p/></b><br>p.onclick= ()=> { <b>state</b>.modify(...)"] --> title["&lt;Text node> Click to update counter"]
+        style root text-align: left
+        root --> info["<b>info</b> &lt;Text node> Counter 0"]
+        root -->|" Clicking p triggers state.modify(), which increments total "| state["<b>state</b><br>state.alue: {total: 0}<br>state.onChange[]; [(obj) => info.nodeValue = `Counter: ${obj.total}`]"]
+        state -->|" state.modify() and state.refresh() send state.value to onChange callbacks.<br>infoText node's text is updated. "| info
+        style state text-align: left
+    end
 ```
 
-It's probably a good practice to maintain a pyramid kind of shape for the DOM nodes that use the state. When
-everything linked to the state is attached under a single DOM node, state will get cleaned up by the GC when the root
-DOM node is removed from the main DOM tree.
+When everything linked to the state is attached under a single DOM node, state will get cleaned up by the GC when the
+root DOM node is removed from the main DOM tree. ki-frame has tools to support more complex scenarios where state
+and events are shared between components, but the above approach should work for most cases.
 
 For long-lived state objects, it might be beneficial to limit the creation of onChange() subscriptions. It's easy to
 unsubscribe the onChange() subscriber, but it's difficult to maintain DOM node specific listeners over a complex code
 base so leaks can become substantial if the onChange() is subscribed frequently for long-lived state objects.
 
-### How to structure code?
+## How to structure code?
 
 For a single function:
 
 - **parameters**: state objects (with types and default value in the signature), channels, functions (subcribe to
   onChange, onDestroy, unsubscribe)
 - **body**: DOM structure setup, (initialize state,) connect subscribers, (render content with state.refresh())
-- **return**: root node, newly created state objects, relevant nodes from testing
+- **return**: root node, newly created state objects (only if someone needs access), relevant nodes from testing
 
 For reuse:
 
@@ -165,7 +217,7 @@ function counter(state = createState({total: 0})) {
 }
 ```
 
-### How to test?
+## How to test?
 
 [jsdom](https://github.com/jsdom/jsdom) makes it very easy to test ki-frame applications.
 
@@ -207,21 +259,242 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 `;
 ```
 
-## WIP Event propagation and state data sharing 
+# ki-frame programming model
 
-Browser apps are very fine-grained and functionality is distributed widely in to the DOM nodes. ki-frame uses a few
-mechanisms to manage the complexity:
+## GC strategies
 
-1. **Channels** are used to connect event sources to subscribers.
-2. **Hierarchy and grouping** is used to simplify clean up of various resources
-3. **Clearly defined event types** simplify app structure by defining straightforward ways to solve common issues:
-   onChange and onDestroy
+* Local
+* Manual
+    * manual state.destroy()
+* Observer
+    * MutationObserver -> state.destroy()
+    * support reattach with delayed check
+* RefMode
+    * createState({..}, {weakRef: true})
+        * all links to sources use weakRef and auto-unsubscribe
+        * all links to targets use weakRef
+        * state.withStrongRef(sameStateButUsesStrongRefs => {}) allows creation of strong refs for sources and targets
 
-### onRefresh
+### GC related tooling
 
-### onChange
+* assertions
+    * allowedSources
+        * limits the sources the state can be attached to
+        * optional safety check that prevents errors
+    * allowedTargets
+    * state used after destroy()
+        * error logging
+        * return error
+* tooling for inspecting state's links to sources and targets
+    * for single state
+    * for larger contexts: whole app, section of app
+* StateRegistry
+    * for keeping track of states
+    * for setting defaults
 
-### onDestroy
+## State broadcast events
+
+* **valueChange**
+    * state: State's value has changed
+        * change is propagated to some linked states (pick, copy)
+* **destroy**
+    * state: state.destroy() has been called
+        * State removes stored value
+        * State removes all subscribers
+        * Destroy is propagated to linked states and destroyable objects
+            * destroyable objects can be fetch's abortable promises or any other
+* **refreshUI**
+    * UI should be refreshed, but state should not change
+* **domRemove**
+    * All known DOM elements should be removed with node.remove()
+    * All listeners attached to known nodes should be unsubscribed
+
+Usecases:
+
+* Developer wants to remove all DOM nodes and state
+    * attach all used states to rootState
+    * attach rootDiv to state as removable
+    * state.remove({dom: true, state: true})
+* Developer wants to remove some DOM nodes and some state items
+
+## State API
+
+* state creation
+    * shared
+*
+
+## No external dependencies -> automatic clean up with GC
+
+For a single function the programming model is straightforward:
+
+- **parameters**: state objects (with types and default value in the signature), channels, functions (subcribe to
+  onChange, onDestroy, unsubscribe)
+- **body**: DOM structure setup, (initialize state, ) connect subscribers, (render content with state.refresh())
+- **return**: root node, newly created state objects (only if someone needs access), relevant nodes from testing
+
+When the returned root node is removed from DOM, all ki-frame listeners and states are removed automatically by GC.
+
+## Registered event sources and automatic cleanup on state.destroy()
+
+ki-frame state can be attached to external event sources like DOM nodes (node.addEventListener()), callback based event
+sources and other states. Most sources provide a way to unsubscribe and ki-frame supports automatic unsubscribe on
+state.destroy() for many types.
+
+```typescript
+state.addDomEventInput("counter", nodes.root, "click", (ev) =>
+  state.modify((cur) => ({total: cur.total + 1})),
+);
+state.destroy()
+```
+
+## createState({}, {weakRef: true})) and state.withStrongRefs(strongRefState => {...})
+
+When state is created in weakRef mode, state creates all input (addDomEventInput, ...) and output (onValueChange, ...)
+subscriptions with WeakRef and automatic unsubscribe. In strongRef mode, all dependencies are created with strong refs.
+
+This allows the code to decide if the dependency should keep objects alive
+
+|                                                      | createState({total: 0}, {weakRef: false}))                                                                                                | createState({total: 0}, {weakRef: true}))                                                                          |   |   |
+|------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|---|---|
+| state.addDomEventInput(name, node, event, fn): input | state is strongly attached to node with the subscribed fn -> keeps state and all the objects it refers to in use while the node is in use | state state is weakly referenced by node's listener -> GC can remove state if there are no strong references to it |   |   |
+| state.onValueChange(fn: (value) => {...}): output    | state refers to fn strongly and keeps the fn pyramid in use                                                                               | state refers to fn weakly  -> GC can remove fn and the objects it refers to                                        |   |   |
+|                                                      |                                                                                                                                           |                                                                                                                    |   |   |
+|                                                      |                                                                                                                                           |                                                                                                                    |   |   |
+
+```typescript
+function counter(state = createState({total: 0}, {weakRef: true})) {
+  const nodes = createNodes();
+  // connect subscribers
+  state.withStrongRefs(strongRefState => {
+    strongRefState.addDomEventInput("counter", nodes.root, "click", (ev) =>
+      state.modify((cur) => ({total: cur.total + 1})),
+    );
+  });
+  state.onValueChange((obj) => {
+    return (nodes.info.nodeValue = `Counter: ${obj.total}`);
+  });
+  // render content with state.refresh()
+  state.refresh();
+  return nodes;
+}
+```
+
+ki-frame makes it easy to manage apps with complex user interfaces. It's easy to create tested and reusable components.
+It's also easy to manage
+
+To support dynamic applications ki-frame supports tree like structures
+for states. Tree like structures make it possible to control parts of the tree, for example add or remove a form
+separately or the full tree.
+
+Browser garbage collection is able to automatically remove pyramid like shapes
+
+There are also tools that support the automatic removal of the ki-frame run
+time parts when UI DOM nodes are removed from the browser document.
+
+ki-frame does most of the heavy lifting on its own, but it's good to understand how the concepts work together.
+
+## Automatic cleanup
+
+In following cases GC is able to remove the classes
+
+```mermaid
+flowchart TD
+    html --> body --> div["&lt;div id='app'/>"]
+    p["p.onclick=[()=> { <b>state</b>.modify(...)]"] --> info["<b>info</b>: Text node"]
+    p --> state["<b>state</b><br>state.alue: {total: 0}<br>state.onChange = [(obj) => <b>info</b>.nodeValue = `Counter: ${obj.total}`]"] --> info
+
+```
+
+## Event propagation and state data sharing
+
+Browser event listener based apps that are very fine-grained and functionality is distributed widely in to the DOM
+nodes.
+
+Event sources that cause ki-frame application functionality to run by sending **input** to ki-frame app
+
+* User action in browser sends DOM event
+* Browser sends event on its own
+* Promises
+* setTimeout and setInterval
+* weakref removal
+
+ki-frame functionality can be:
+
+* change ki-frame configuration / state (internal)
+    * change state value
+    * add new state objects
+    * remove state objects
+* modify DOM (output)
+    * add new DOM nodes/content
+    * remove DOM nodes/content
+    * add/remove listeners
+    * modify DOM content
+* start external process (output)
+    * synchronous responds immediately
+    * trigger async process (and wait for response): fetch
+
+Graph shows how ki-frame
+
+```mermaid
+flowchart LR
+    subgraph ki-frame internals
+        ki-frame --> onChange["state.onChange()"]
+        onChange --> internal{{<b>ki-frame internal</b><br>change state value<br>add new state objects<br>remove state objects}} --> ki-frame
+    end
+    subgraph Input
+        User --> Browser --> domInput[DOM input nodes: onclick] -->|state . addEventListener| ki-frame
+        Promises --> ki-frame
+        setTimeoutInterval["setTimeout()<br>setInterval()"] --> ki-frame
+    end
+    subgraph Ouput
+        onChange --> domOutput[add, remove or modify DOM nodes/content/listeners]
+        onChange --> externalSync[start external synchronous/async process] --> ki-frame
+    end
+
+```
+
+Each input event can trigger a chain of events that trigger various actions. A chain can branch to a number of
+destinations, actions can form a pyramid where single input triggers various processes and actions and results in
+changes in various locations.
+
+ki-frame uses a few mechanisms to manage the complexity:
+
+## Linked items
+
+* stateA -> stateB
+    * shared state value object, own linked items
+    * shared state value object's path, own linked items
+* stateA -> nodeA
+* stateA -> stateB -> nodeB
+* stateA -> fetchPromise
+
+
+* DOM node
+* Removable items
+    * state value
+    * linked states
+    *
+
+## State and DOM node life cycle events
+
+### Pyramid shape for event propagation
+
+With ki-frame, for many events it's possible to link items in pyramid shape. Pyramid shape makes it possible to easily
+remove whole trees by removing for example the hub or root1. Removing root2 does not have an effect on items in root1.
+
+refresh and destroy events are passed to the whole state tree, and the states will trigger refresh and destroy for all
+linked states and items. onChange and domRemove can propagate to linked states and their items but by default they
+don't.
+
+```mermaid
+flowchart TD
+    root1 --> A
+    root1 --> hub
+    hub --> C
+    hub --> D
+    root2 --> E
+    root2 --> F
+```
 
 ### Hierarchy and grouping
 
@@ -270,7 +543,7 @@ notes:
    cleanups. If you have different levels of hierarchy and cascading/recursive state.destroy(), use
    state.createAttachedState() and state.destroy() on suitable state.
 
-### Sharing state data
+## Sharing state data
 
 |                     | Description                                    | States connect to shared value                      | Destroy propagates | onChange propagates  |
 |---------------------|------------------------------------------------|-----------------------------------------------------|--------------------|----------------------|
@@ -280,9 +553,9 @@ notes:
 
 # TODO
 
-* example of inversion of control, instead of sprinkling functionality to element handlers, do it with main code
-* domBuilder: Add support for WrappedNode.getNode to enable helper apis for elements
-* state: Example for onclick -> fetch -> display
+* state: better cleanup
+    * register event listeners with state: state.event(node, type, (ev) -> state.) -> unsub
+    * MutationObserver and WeakRef + FinalizationRegistry
 * state: Example for form
 * propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
     * state.refresh("all"|"linked"|"this")
@@ -292,10 +565,132 @@ notes:
         * default should be: {destroy: true, refresh: true}
     * maybe onChange should include onDestory subscribtion too
     * Create a diagram to explain how to changes and destroys work together
-* reducer()
-* pick()
+* state operations
+    * state.reducer()
+    * state.pick()
+    * state.merge()
 * state.fetch() - fetch attached to a state so that state.destroy() aborts the fetch
 * promiseToState: should unattach from parentState once promise fulfills or rejects
 * domBuilder: separate classic and extended api. extend text()
 * domBuilder: Configure createElement partial attribute types with JSX.IntrinsicElements[T] to get props for
   HtmlElements
+
+# References in browser apps
+
+## DOM event listeners
+
+Browser initiated DOM events:
+
+* DOM & page lifecycle events
+    * DOMContentLoaded
+    * load
+    * beforeunload / unload
+    * pageshow / pagehide
+    * visibilitychange
+    * readystatechange
+* Window/environment events
+    * resize
+    * scroll
+    * hashchange
+    * popstate
+    * online / offline
+    * storage
+* Resource loading events
+    * &lt;img>: load, error
+    * &lt;script>: load, error
+    * &lt;link> (CSS): load, error
+    * XMLHttpRequest: load, error, timeout, abort
+* CSS animation & transition events
+    * animationstart / animationend
+    * animationiteration
+    * transitionend
+* Web messaging events
+    * message (postMessage between windows or workers)
+    * error
+
+User initiated DOM events:
+
+* Mouse events
+    * click / dblclick / auxclick
+    * mousedown / mousemove / mouseup
+    * mouseenter / mouseleave
+    * mouseover / mouseout
+    * contextmenu
+    * wheel
+* Pointer events
+    * pointerdown / pointermove / pointerup
+    * pointerenter / pointerleave
+    * pointerover / pointerout
+    * pointercancel
+    * gotpointercapture / lostpointercapture
+* Touch events
+    * touchstart / touchmove / touchend
+    * touchcancel
+* Drag and drop events
+    * dragstart
+    * drag
+    * dragend
+    * dragenter
+    * dragleave
+    * dragover
+    * drop
+* Keyboard events
+    * keydown / keyup
+    * keypress (deprecated)
+* Focus events
+    * focus, blur, focusin, focusout
+* Clipboard events
+    * copy
+    * cut
+    * paste
+* Media events
+    * play, pause, ended, canplay, timeupdate
+* Device and fullscreen events
+    * deviceorientation, devicemotion
+    * fullscreenchange, fullscreenerror
+
+## Callback-based triggering
+
+* Promises/microtasks (internal scheduling)
+    * Promise resolution callbacks (then, catch, finally)
+    * window.queueMicrotask()
+* Streams, fetch progression, async iterators
+* Timers
+    * setTimeout(fn)
+    * setInterval(fn)
+* Rendering & idle scheduling
+    * requestAnimationFrame(fn)
+    * requestIdleCallback(fn)
+* Observers observe a number of targets and call a callback function
+    * MutationObserver - Callback runs when DOM changes.
+    * ResizeObserver - Callback runs when element size changes.
+    * IntersectionObserver - Callback runs when element intersects viewport.
+* WebRTC callbacks
+    * CE candidate callbacks
+    * PeerConnection state callbacks
+
+## WeakRef
+
+Desktop browsers have supported WeakRef since 2020-2021, mobile browsers 2024-2025.
+
+## Avoid: Top level const/let and window.state
+
+Creates strong reference, avoid:
+
+* top level javascript const/let: <script> const obj = { foo: 123 }; </script>
+* setting value to window: window.state = { value: 1 };
+* ES module top level const/let: <script type="module">const myState = { foo: 1 };</script> (if module is unloaded, GC
+  can work)
+
+# Legend for icons
+
+| Icon | Description         |
+|------|---------------------|
+| ✅    | Done                |
+| 🛠️  | Work in Progress    |
+| 📅   | Planned             |
+| 🤔   | Possible            |
+| 🚫   | Not Going to Happen |
+| 🔥   | Top priority        |
+| ⭐    | Medium priority     |
+| 🐢   | Low priority        |

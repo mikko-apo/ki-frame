@@ -4,7 +4,33 @@ export interface Destroyable {
   destroy(): void;
 }
 
+export interface EventListenerInfo<K extends keyof HTMLElementEventMap> {
+  name: string;
+  weakRef: WeakRef<{
+    node: Node;
+    type: K;
+    listener: EventListenerOrEventListenerObject | null;
+    options?: boolean | AddEventListenerOptions;
+  }>;
+}
+
+export type EventSource<T extends object> =
+  | ({ type: "dom" } & EventSourceBase<Node>)
+  | ({ type: "fn" } & EventSourceBase<T>);
+
+interface EventSourceBase<T extends object> {
+  name?: string;
+  unsub?: Unsub;
+  weakRefUnsub?: WeakRef<Unsub>;
+  source?: WeakRef<T>;
+}
+
 export interface State<T> extends Destroyable {
+  describe(): {
+    name: string;
+    eventListeners: EventListenerInfo<any>[];
+  };
+
   get(): T;
 
   set(newObj: T): void;
@@ -15,7 +41,7 @@ export interface State<T> extends Destroyable {
   refresh(): void;
 
   /** Called whenever the state object changes. Returns an unsubscribe function. */
-  onChange(cb: (obj: T, old: T) => void): Unsub;
+  onValueChange(cb: (obj: T, old: T) => void): Unsub;
 
   destroy(): void;
 
@@ -26,6 +52,17 @@ export interface State<T> extends Destroyable {
   addToDestroy(target: Destroyable): Unsub;
 
   addToParentDestroy<T>(parent: State<T>): Unsub;
+
+  addDomEvent<K extends keyof HTMLElementEventMap>(
+    name: string,
+    node: Node,
+    type: K,
+    listener: (ev: HTMLElementEventMap[K]) => any,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+
+  //  remove(node: Node): void
+  //  onDestroyRemove<T extends Node>(node: T): T
 }
 
 export class WrappedNode {
