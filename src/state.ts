@@ -1,5 +1,5 @@
 import { Channel, type Unsub } from "./channel";
-import type { Destroyable, State } from "./types";
+import type { Destroyable, EventListenerInfo, EventSource, State } from "./types";
 import { createId } from "./util";
 
 type ChangeCb<T> = (obj: T, old: T) => void;
@@ -9,19 +9,27 @@ function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-export function createState<Value>(initialStateObject: Value, options?: { name?: string }): State<Value> {
-  const { name = "state" } = options ?? {};
-  const id = createId(name);
-  let value: Value = initialStateObject;
+export function createState<Value>(initialValue: Value, options?: { name?: string; weakRef?: boolean }): State<Value> {
+  const { name = "state", weakRef = false } = options ?? {};
+  const stateId = createId(name);
+  let value: Value = initialValue;
   let destroyed = false;
 
-  const onChange = new Channel<[Value, Value]>(`${id}-onChange`);
-  const onDestroy = new Channel<[]>(`${id}-onDestroy`);
+  const onChange = new Channel<[Value, Value]>(`${stateId}-onChange`);
+  const onDestroy = new Channel<[]>(`${stateId}-onDestroy`);
   const destroyables = new Set<Destroyable>();
-
   const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
-  const idTxt = (txt: string) => `${id}: ${txt}`;
+
+  const idTxt = (txt: string) => `${stateId}: ${txt}`;
+  const eventListeners: EventListenerInfo<any>[] = [];
+  const eventSources: EventSource<any>[] = [];
   const state: State<Value> = {
+    describe() {
+      return {
+        eventListeners,
+        name: stateId,
+      };
+    },
     get() {
       if (destroyed) throw new Error(idTxt("State destroyed. Cannot get value"));
       return value;
@@ -45,7 +53,7 @@ export function createState<Value>(initialStateObject: Value, options?: { name?:
       notifyChange(value, value);
     },
 
-    onChange(cb: ChangeCb<Value>): Unsub {
+    onValueChange(cb: ChangeCb<Value>): Unsub {
       if (destroyed) throw new Error(idTxt("Cannot subscribe to destroyed state"));
       return onChange.subscribe(cb);
     },
@@ -90,7 +98,45 @@ export function createState<Value>(initialStateObject: Value, options?: { name?:
       destroyables.clear();
       onChange.destroy();
       onDestroy.destroy();
+      for (const es of eventSources) {
+        if (es.weakRefUnsub) {
+          const unsub = es.weakRefUnsub.deref();
+          if (unsub) unsub();
+          es.weakRefUnsub = undefined;
+        }
+        if (es.unsub) {
+          es.unsub();
+        }
+        es.source = undefined;
+      }
     },
+
+    addDomEvent<K extends keyof HTMLElementEventMap>(
+      name: string,
+      node: Node,
+      type: K,
+      listener: (ev: HTMLElementEventMap[K]) => void | EventListenerObject | null,
+      options?: boolean | AddEventListenerOptions,
+    ): void {
+      node.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
+      const unsub = () =>
+        node.removeEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
+      if (weakRef) {
+        eventSources.push({
+          name: `${name}: <${node.nodeName}>.${type} -> ${stateId}`,
+          type: "dom",
+          source: new WeakRef(node),
+          weakRefUnsub: new WeakRef(unsub),
+        });
+      } else {
+        eventSources.push({
+          name: `${name}: <${node.nodeName}>.${type} -> ${stateId}`,
+          type: "dom",
+          source: new WeakRef(node),
+          unsub,
+        });
+      }
+    }
   };
   return state;
 }

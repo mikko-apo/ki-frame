@@ -14,7 +14,7 @@ function counter(state = createState({ total: 0 })) {
   const nodes = createNodes();
   // connect subscribers
   nodes.root.onclick = () => state.modify((cur) => ({ total: cur.total + 1 }));
-  state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
+  state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
   // render content with state.refresh()
   state.refresh();
   return nodes;
