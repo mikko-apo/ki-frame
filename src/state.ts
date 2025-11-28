@@ -1,5 +1,5 @@
 import { Channel, type Unsub } from "./channel";
-import type { Destroyable, EventListenerInfo, EventSource, State } from "./types";
+import type {Controller, Destroyable, EventListenerInfo, EventSource, State} from "./types";
 import { createId } from "./util";
 
 type ChangeCb<T> = (obj: T, old: T) => void;
@@ -9,51 +9,44 @@ function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-export function createState<Value>(initialValue: Value, options?: { name?: string; weakRef?: boolean }): State<Value> {
+interface StateOptions {
+  name?: string;
+  weakRef?: boolean
+}
+
+export function createController(options?: StateOptions): Controller {
   const { name = "state", weakRef = false } = options ?? {};
   const stateId = createId(name);
-  let value: Value = initialValue;
+  const getId = () => stateId
   let destroyed = false;
 
-  const onChange = new Channel<[Value, Value]>(`${stateId}-onChange`);
+  const onChange = new Channel<[]>(`${stateId}-onChange`);
   const onDestroy = new Channel<[]>(`${stateId}-onDestroy`);
   const destroyables = new Set<Destroyable>();
-  const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
+  const notifyChange = () => onChange.publish();
 
   const idTxt = (txt: string) => `${stateId}: ${txt}`;
   const eventListeners: EventListenerInfo<any>[] = [];
   const eventSources: EventSource<any>[] = [];
-  const state: State<Value> = {
+  const state: Controller = {
+    getId,
+
+    isDestroyed(): boolean {
+      return destroyed;
+    },
+
     describe() {
       return {
         eventListeners,
         name: stateId,
       };
     },
-    get() {
-      if (destroyed) throw new Error(idTxt("State destroyed. Cannot get value"));
-      return value;
-    },
-
-    set(newObj: Value) {
-      if (destroyed) throw new Error(idTxt("State destroyed. Cannot set value"));
-      const old = value;
-      if (shallowEqual(old, newObj)) return;
-      value = newObj;
-      notifyChange(value, old);
-    },
-
-    modify(fn: (cur: Value) => Value) {
-      if (destroyed) throw new Error(idTxt("State destroyed. Cannot modify"));
-      const next = fn(value);
-      state.set(next);
-    },
 
     refresh() {
-      notifyChange(value, value);
+      notifyChange();
     },
 
-    onValueChange(cb: ChangeCb<Value>): Unsub {
+    onValueChange(cb: Unsub): Unsub {
       if (destroyed) throw new Error(idTxt("Cannot subscribe to destroyed state"));
       return onChange.subscribe(cb);
     },
@@ -136,7 +129,48 @@ export function createState<Value>(initialValue: Value, options?: { name?: strin
           unsub,
         });
       }
-    }
+    },
+  };
+  return state;
+}
+
+export function createState<Value>(initialValue?: Value, options?: StateOptions): State<Value> {
+  const controller = createController(options);
+  let value: Value = initialValue as Value;
+
+  const onChange = new Channel<[Value, Value]>(`${controller.getId()}-onChange`);
+  const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
+
+  const idTxt = (txt: string) => `${controller.getId()}: ${txt}`;
+  const state: State<Value> = {
+    ...controller,
+    get() {
+      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot get value"));
+      return value;
+    },
+
+    set(newObj: Value) {
+      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot set value"));
+      const old = value;
+      if (shallowEqual(old, newObj)) return;
+      value = newObj;
+      notifyChange(value, old);
+    },
+
+    modify(fn: (cur: Value) => Value) {
+      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot modify"));
+      const next = fn(value);
+      state.set(next);
+    },
+
+    refresh() {
+      notifyChange(value, value);
+    },
+
+    onValueChange(cb: ChangeCb<Value>): Unsub {
+      if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
+      return onChange.subscribe(cb);
+    },
   };
   return state;
 }

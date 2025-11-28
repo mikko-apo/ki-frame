@@ -1,4 +1,4 @@
-import type { Unsub } from "./channel";
+import type {Unsub} from "./channel";
 
 export interface Destroyable {
   destroy(): void;
@@ -25,23 +25,21 @@ interface EventSourceBase<T extends object> {
   source?: WeakRef<T>;
 }
 
-export interface State<T> extends Destroyable {
+export interface Controller extends Destroyable {
+  getId(): string;
+
+  isDestroyed(): boolean;
+
   describe(): {
     name: string;
     eventListeners: EventListenerInfo<any>[];
   };
 
-  get(): T;
-
-  set(newObj: T): void;
-
-  modify(fn: (cur: T) => T): void;
-
   /** Trigger onChange() for all subscribers. Useful for initial paint. **/
   refresh(): void;
 
   /** Called whenever the state object changes. Returns an unsubscribe function. */
-  onValueChange(cb: (obj: T, old: T) => void): Unsub;
+  onValueChange(cb: () => void): Unsub;
 
   destroy(): void;
 
@@ -63,6 +61,17 @@ export interface State<T> extends Destroyable {
 
   //  remove(node: Node): void
   //  onDestroyRemove<T extends Node>(node: T): T
+}
+
+export interface State<T> extends Controller {
+  get(): T;
+
+  set(newObj: T): void;
+
+  modify(fn: (cur: T) => T): void;
+
+  /** Called whenever the state object changes. Returns an unsubscribe function. */
+  onValueChange(cb: (obj: T, old: T) => void): Unsub;
 }
 
 export class WrappedNode {
