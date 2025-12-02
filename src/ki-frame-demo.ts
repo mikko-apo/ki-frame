@@ -1,6 +1,7 @@
 import { ChannelRegistry } from "./channel";
-import {b, br, button, div, form, input, p, pre, setElementToId, table, td, text, textarea, tr} from "./domBuilder";
-import { createController,createState } from "./state";
+import { b, br, button, div, form, input, p, pre, setElementToId, table, td, text, tr } from "./domBuilder";
+import { createFormState, formEvent } from "./form";
+import { createController, createState } from "./state";
 import type { State } from "./types";
 
 interface Total {
@@ -16,33 +17,32 @@ const demo = (title: string, fn: () => HTMLElement) => ({ title, fn });
 
 const demos: Demo[] = [
   demo("counter(), naive 2010 DOM node version", function naiveCounter() {
-      const state = createState({total: 0});
+    const state = createState({ total: 0 });
 
-      function infoText(state: State<Total>) {
-        const t = text();
-        state.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
-        return t;
-      }
-
-      // renders initial content by triggering state.onChange() subscribers
-      state.refresh();
-      return p("Total: ", infoText(state), {
-        onclick: () => state.modify((cur) => ({total: cur.total + 1})),
-      });
+    function infoText(state: State<Total>) {
+      const t = text();
+      state.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
+      return t;
     }
-  ),
+
+    // renders initial content by triggering state.onChange() subscribers
+    state.refresh();
+    return p("Total: ", infoText(state), {
+      onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
+    });
+  }),
   demo("testable counter", function testTableCounter() {
     // DOM structure setup for testing
     const createNodes = () => {
       const info = text();
       const root = p("Click to update counter", info);
-      return {info, root};
+      return { info, root };
     };
 
-    function counter(state = createState({total: 0})) {
+    function counter(state = createState({ total: 0 })) {
       const nodes = createNodes();
       // connect subscribers
-      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({total: cur.total + 1})));
+      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
       state.onValueChange((obj) => {
         console.log(state.describe());
         return (nodes.info.nodeValue = `Counter: ${obj.total}`);
@@ -55,14 +55,14 @@ const demos: Demo[] = [
     return counter().root;
   }),
   demo("onDestroyDemo", function onDestroyTwoNodes() {
-    const state = createState({total: 123});
+    const state = createState({ total: 123 });
     const info = (txt: string, s: State<Total>) => {
       const t = text();
       s.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
       s.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`));
       return p(t);
     };
-    const root = p(button("Click me!", {onclick: state.destroy}), info("1", state), info("2", state));
+    const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
     state.refresh();
     return root;
   }),
@@ -138,11 +138,17 @@ const demos: Demo[] = [
 
       // formData contains state for the form, attach listeners
       const log = (s: string) => {
-        info.append(`${s}\n`)
-        return true
-      }
+        info.append(`${s}\n`);
+        return true;
+      };
       domTextInput(formData, "i1", i1, "a");
-      domTextInput(formData, "i2", i2, "b", v => (v.length % 2 == 0) && log(`b value '${v}' has wrong length ${v.length}`));
+      domTextInput(
+        formData,
+        "i2",
+        i2,
+        "b",
+        (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`),
+      );
       formData.onValueChange(({ a, b }) => {
         i1.value = a;
         i2.value = b;
@@ -151,8 +157,8 @@ const demos: Demo[] = [
       // submitState listens to submit button and
       const submitController = createController();
       submitController.addDomEvent("submit", root, "submit", (ev) => {
-        ev.preventDefault()
-        const {a,b} = formData.get();
+        ev.preventDefault();
+        const { a, b } = formData.get();
         log(`Form submitted ${a} ${b}`);
       });
 
@@ -163,12 +169,60 @@ const demos: Demo[] = [
 
     return simpleForm();
   }),
+  demo("form handling with createFormState", function createFormStateDemo(init = { a: 23, b: 10 }) {
+    // define dom elements
+    const i1 = input();
+    const i2 = input();
+    const info = pre();
+    const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+
+    const log = (s: string) => info.append(`${s}\n`);
+
+    const isDividable = (prefix: string, divider: number): ((n: number) => boolean) => {
+      return (n: number) => {
+        const isOk = n % divider === 0;
+        if (isOk) {
+          return true;
+        }
+        log(`${prefix} ${n} is not dividable by ${divider}`);
+        return false;
+      };
+    };
+    const formData = createFormState(
+      {
+        a: formEvent(i1, "keyup", (s) => Number(s), isDividable("a", 10)),
+        b: formEvent(i2, "keyup", (s) => Number(s), isDividable("b", 5)),
+      },
+      {
+        init,
+        validate: ({ a, b }) => {
+          const isOk = a + b === 15;
+          if (isOk) {
+            return true;
+          }
+          log(`Form full state validation : ${a}0${b}=${a + b} is not 15`);
+          return false;
+        },
+      },
+    );
+    formData.onValueChange(({ a, b }) => {
+      log(`Form data set to: a:${a} b:${b}`);
+    });
+    formData.onSubmit(root, (ev) => {
+      const { a, b } = formData.get();
+      log(`Form submitted ${a} ${b}`);
+    });
+
+    // renders content with with state.onChange()
+    formData.refresh();
+    return root;
+  }),
 ];
 
 function demolist(demos: Demo[]) {
-  const rows = demos.map(demo => {
+  const rows = demos.map((demo) => {
     const target = td();
-    const src = td()
+    const src = td();
     const launchDemo = button(`Launch ${demo.fn.name}`, {
       onclick: () => {
         target.replaceChildren(demo.fn());
@@ -176,24 +230,24 @@ function demolist(demos: Demo[]) {
       },
     });
     const row = tr(td(launchDemo, br(), demo.title), src, target);
-    row.style = "vertical-align: baseline"
+    row.style = "vertical-align: baseline";
     return row;
   }, demo);
 
-  const demoRowFunctionStringSearchIndex = demos.map(demo => demo.fn.toString().toLowerCase())
-  const state= createState();
+  const demoRowFunctionStringSearchIndex = demos.map((demo) => demo.fn.toString().toLowerCase());
+  const state = createState();
   const search = input();
-  state.addDomEvent("search", search, "keyup", ()=> {
+  state.addDomEvent("search", search, "keyup", () => {
     const searchString = search.value.toLowerCase().trim();
     demoRowFunctionStringSearchIndex.forEach((demoFn, index) => {
-      if(searchString.length > 2) {
+      if (searchString.length > 2) {
         rows[index].hidden = demoFn.indexOf(searchString) === -1;
       }
-      if(searchString.length == 0) {
+      if (searchString.length == 0) {
         rows[index].hidden = false;
       }
     });
-  })
+  });
   return div(search, table(rows));
 }
 

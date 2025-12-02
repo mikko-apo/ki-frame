@@ -1,9 +1,44 @@
-"use strict";
 (() => {
   // src/util.ts
   var runningId = 0;
   function createId(id) {
     return `${id}-${runningId++}`;
+  }
+  function copyAndSet(obj, path, value) {
+    const segments = Array.isArray(path)
+      ? path.map((p2) => (typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2))
+      : path === ""
+        ? []
+        : path.split(".").map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
+    if (segments.length === 0) return value;
+    const parents = [];
+    let cur = obj;
+    parents.push(cur);
+    for (const seg of segments) {
+      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
+      parents.push(cur);
+    }
+    let newChild = value;
+    for (let i2 = segments.length - 1; i2 >= 0; i2--) {
+      const key = segments[i2];
+      const origParent = parents[i2];
+      let newParent;
+      if (Array.isArray(origParent)) {
+        newParent = origParent.slice();
+      } else if (origParent !== null && typeof origParent === "object") {
+        newParent = { ...origParent };
+      } else {
+        newParent = typeof key === "number" ? [] : {};
+      }
+      if (Array.isArray(newParent) && typeof key === "number") {
+        if (key >= newParent.length) {
+          newParent.length = key + 1;
+        }
+      }
+      newParent[key] = newChild;
+      newChild = newParent;
+    }
+    return newChild;
   }
 
   // src/channel.ts
@@ -127,7 +162,10 @@
     addItems(element, ...args);
     return element;
   }
-  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
+  var createElementFn =
+    (tagName) =>
+    (...args) =>
+      createElement(tagName, ...args);
   var a = createElementFn("a");
   var abbr = createElementFn("abbr");
   var address = createElementFn("address");
@@ -274,7 +312,7 @@
       describe() {
         return {
           eventListeners,
-          name: stateId
+          name: stateId,
         };
       },
       refresh() {
@@ -287,16 +325,14 @@
       onDestroy(cb) {
         if (destroyed) {
           cb();
-          return () => {
-          };
+          return () => {};
         }
         return onDestroy.subscribe(cb);
       },
       addToDestroy(target) {
         if (destroyed) {
           target.destroy();
-          return () => {
-          };
+          return () => {};
         }
         destroyables.add(target);
         return () => destroyables.delete(target);
@@ -342,17 +378,18 @@
             name: `${name2}: <${node.nodeName}>.${type} -> ${stateId}`,
             type: "dom",
             source: new WeakRef(node),
-            weakRefUnsub: new WeakRef(unsub)
+            weakRefUnsub: new WeakRef(unsub),
           });
         } else {
           eventSources.push({
             name: `${name2}: <${node.nodeName}>.${type} -> ${stateId}`,
             type: "dom",
             source: new WeakRef(node),
-            unsub
+            unsub,
           });
         }
-      }
+        return unsub;
+      },
     };
     return state;
   }
@@ -386,29 +423,107 @@
       onValueChange(cb) {
         if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
         return onChange.subscribe(cb);
-      }
+      },
     };
     return state;
+  }
+
+  // src/form.ts
+  var FormsInput = class {
+    constructor(node, key, map2, validate) {
+      this.node = node;
+      this.key = key;
+      this.map = map2;
+      this.validate = validate;
+    }
+  };
+  function domEvent(node, key, map2, validate) {
+    return new FormsInput(node, key, map2, validate);
+  }
+  function isFormsInput(x) {
+    return x instanceof FormsInput;
+  }
+  function collectFormsInputs(root) {
+    const out = [];
+    function visit(node, pathParts) {
+      if (node == null) return;
+      if (isFormsInput(node)) {
+        const path = pathParts.map((p2) => String(p2)).join(".");
+        out.push([path, node]);
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (let i2 = 0; i2 < node.length; i2++) {
+          visit(node[i2], [...pathParts, i2]);
+        }
+        return;
+      }
+      if (typeof node === "object") {
+        for (const key of Object.keys(node)) {
+          visit(node[key], [...pathParts, key]);
+        }
+        return;
+      }
+    }
+    visit(root, []);
+    return out;
+  }
+  function readRaw(node) {
+    var _a;
+    const anyNode = node;
+    if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
+    return String((_a = node.textContent) != null ? _a : "");
+  }
+  function createFormState(t, options) {
+    const { init, validate } = options || {};
+    const state = createState(init, t);
+    const inputs = collectFormsInputs(t);
+    for (const [path, input2] of inputs) {
+      state.addDomEvent(path, input2.node, input2.key, (ev) => {
+        const value = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
+        console.log(`dom event ${path} ${input2.key} value ${value}`);
+        if (input2.validate && !input2.validate(value, input2.node, ev)) {
+          console.log(`Validating ${input2.key} value ${value}: false`);
+          return;
+        }
+        const newState = copyAndSet(state.get(), path, value);
+        if (validate && !validate(newState)) {
+          console.log(`Validating state: false`, newState);
+          return;
+        }
+        state.set(newState);
+      });
+    }
+    const onsubmit = (root, listener, options2) => {
+      return state.addDomEvent(
+        "submit",
+        root,
+        "submit",
+        (ev) => {
+          ev.preventDefault();
+          listener(ev);
+        },
+        options2,
+      );
+    };
+    return { ...state, onsubmit };
   }
 
   // src/ki-frame-demo.ts
   var demo = (title2, fn) => ({ title: title2, fn });
   var demos = [
-    demo(
-      "counter(), naive 2010 DOM node version",
-      function naiveCounter() {
-        const state = createState({ total: 0 });
-        function infoText(state2) {
-          const t = text();
-          state2.onValueChange((obj) => t.nodeValue = `${obj.total}`);
-          return t;
-        }
-        state.refresh();
-        return p("Total: ", infoText(state), {
-          onclick: () => state.modify((cur) => ({ total: cur.total + 1 }))
-        });
+    demo("counter(), naive 2010 DOM node version", function naiveCounter() {
+      const state = createState({ total: 0 });
+      function infoText(state2) {
+        const t = text();
+        state2.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
+        return t;
       }
-    ),
+      state.refresh();
+      return p("Total: ", infoText(state), {
+        onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
+      });
+    }),
     demo("testable counter", function testTableCounter() {
       const createNodes = () => {
         const info = text();
@@ -420,7 +535,7 @@
         state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
         state.onValueChange((obj) => {
           console.log(state.describe());
-          return nodes.info.nodeValue = `Counter: ${obj.total}`;
+          return (nodes.info.nodeValue = `Counter: ${obj.total}`);
         });
         state.refresh();
         return nodes;
@@ -431,8 +546,8 @@
       const state = createState({ total: 123 });
       const info = (txt, s2) => {
         const t = text();
-        s2.onValueChange((obj) => t.nodeValue = `${txt}: ${obj.total}`);
-        s2.onDestroy(() => t.nodeValue = `${txt}: state destroyed`);
+        s2.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
+        s2.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`));
         return p(t);
       };
       const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
@@ -472,21 +587,22 @@
       const t1 = text("T1");
       const root = p(
         p("Click me to send message!", {
-          onclick: () => channel.publish({ num: num++ })
+          onclick: () => channel.publish({ num: num++ }),
         }),
-        t1
+        t1,
       );
       return root;
     }),
     demo("simple form - form handling with state", function naiveForm() {
-      const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", (ev) => {
-        if (validate) {
-          if (validate(node.value)) {
-            return;
+      const domTextInput = (state, name, node, key, validate) =>
+        state.addDomEvent(name, node, "keyup", (ev) => {
+          if (validate) {
+            if (validate(node.value)) {
+              return;
+            }
           }
-        }
-        state.modify((cur) => ({ ...cur, [key]: node.value }));
-      });
+          state.modify((cur) => ({ ...cur, [key]: node.value }));
+        });
       function simpleForm(formData = createState({ a: "23", b: "234" })) {
         const i1 = input();
         const i2 = input();
@@ -498,7 +614,13 @@
           return true;
         };
         domTextInput(formData, "i1", i1, "a");
-        domTextInput(formData, "i2", i2, "b", (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`));
+        domTextInput(
+          formData,
+          "i2",
+          i2,
+          "b",
+          (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`),
+        );
         formData.onValueChange(({ a: a2, b: b3 }) => {
           i1.value = a2;
           i2.value = b3;
@@ -514,7 +636,52 @@
         return root;
       }
       return simpleForm();
-    })
+    }),
+    demo("form handling with createFormState", function createFormStateDemo(init = { a: 23, b: 10 }) {
+      const i1 = input();
+      const i2 = input();
+      const info = pre();
+      const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+      const log = (s2) =>
+        info.append(`${s2}
+`);
+      const isDividable = (prefix, divider) => {
+        return (n) => {
+          const isOk = n % divider === 0;
+          if (isOk) {
+            return true;
+          }
+          log(`${prefix} ${n} is not dividable by ${divider}`);
+          return false;
+        };
+      };
+      const formData = createFormState(
+        {
+          a: domEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
+          b: domEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5)),
+        },
+        {
+          init,
+          validate: ({ a: a2, b: b3 }) => {
+            const isOk = a2 + b3 === 15;
+            if (isOk) {
+              return true;
+            }
+            log(`Form full state validation : ${a2}0${b3}=${a2 + b3} is not 15`);
+            return false;
+          },
+        },
+      );
+      formData.onValueChange(({ a: a2, b: b3 }) => {
+        log(`Form data set to: a:${a2} b:${b3}`);
+      });
+      formData.onsubmit(root, (ev) => {
+        const { a: a2, b: b3 } = formData.get();
+        log(`Form submitted ${a2} ${b3}`);
+      });
+      formData.refresh();
+      return root;
+    }),
   ];
   function demolist(demos2) {
     const rows = demos2.map((demo2) => {
@@ -524,7 +691,7 @@
         onclick: () => {
           target.replaceChildren(demo2.fn());
           src.replaceChildren(pre(demo2.fn.toString()));
-        }
+        },
       });
       const row = tr(td(launchDemo, br(), demo2.title), src, target);
       row.style = "vertical-align: baseline";
