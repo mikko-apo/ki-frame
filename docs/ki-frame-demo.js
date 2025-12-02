@@ -1,118 +1,5 @@
+"use strict";
 (() => {
-  // src/util.ts
-  var runningId = 0;
-  function createId(id) {
-    return `${id}-${runningId++}`;
-  }
-  function copyAndSet(obj, path, value) {
-    const segments = Array.isArray(path)
-      ? path.map((p2) => (typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2))
-      : path === ""
-        ? []
-        : path.split(".").map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
-    if (segments.length === 0) return value;
-    const parents = [];
-    let cur = obj;
-    parents.push(cur);
-    for (const seg of segments) {
-      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
-      parents.push(cur);
-    }
-    let newChild = value;
-    for (let i2 = segments.length - 1; i2 >= 0; i2--) {
-      const key = segments[i2];
-      const origParent = parents[i2];
-      let newParent;
-      if (Array.isArray(origParent)) {
-        newParent = origParent.slice();
-      } else if (origParent !== null && typeof origParent === "object") {
-        newParent = { ...origParent };
-      } else {
-        newParent = typeof key === "number" ? [] : {};
-      }
-      if (Array.isArray(newParent) && typeof key === "number") {
-        if (key >= newParent.length) {
-          newParent.length = key + 1;
-        }
-      }
-      newParent[key] = newChild;
-      newChild = newParent;
-    }
-    return newChild;
-  }
-
-  // src/channel.ts
-  var Channel = class {
-    constructor(name) {
-      this.subs = /* @__PURE__ */ new Set();
-      this.idTxt = (txt) => `${this.id}: ${txt}`;
-      this.id = createId(name);
-    }
-    subscribe(fn) {
-      this.subs.add(fn);
-      return () => {
-        this.unsubscribe(fn);
-      };
-    }
-    subscribeFn() {
-      return (fn) => this.subscribe(fn);
-    }
-    // subscribe once: handler auto-unsubscribe after first invocation
-    once(fn) {
-      const unsub = () => this.unsubscribe(wrapper);
-      const wrapper = (...args) => {
-        unsub();
-        fn(...args);
-      };
-      this.subs.add(wrapper);
-      return unsub;
-    }
-    unsubscribe(fn) {
-      this.subs.delete(fn);
-    }
-    // synchronous publish — invokes handlers and doesn't wait for Promises
-    publish(...args) {
-      for (const fn of Array.from(this.subs)) {
-        try {
-          fn(...args);
-        } catch (err) {
-          console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err);
-        }
-      }
-    }
-    // asynchronous publish — waits for all subscribers; rejects if any rejects
-    async publishAsync(...args) {
-      const promises = Array.from(this.subs).map(async (fn) => fn(...args));
-      const settled = await Promise.allSettled(promises);
-      const rejections = settled.filter((s2) => s2.status === "rejected");
-      if (rejections.length) {
-        const err = new Error(`${rejections.length} subscriber(s) failed`);
-        err.details = rejections.map((r) => r.reason);
-        throw err;
-      }
-    }
-    destroy() {
-      this.subs.clear();
-    }
-  };
-  var ChannelRegistry = class {
-    constructor() {
-      this.map = /* @__PURE__ */ new Map();
-    }
-    get(name) {
-      let ch = this.map.get(name);
-      if (!ch) {
-        ch = new Channel(String(name));
-        this.map.set(name, ch);
-      }
-      return ch;
-    }
-    destroy() {
-      for (const ch of this.map.values()) ch.destroy();
-      this.map.clear();
-    }
-  };
-
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
@@ -162,10 +49,7 @@
     addItems(element, ...args);
     return element;
   }
-  var createElementFn =
-    (tagName) =>
-    (...args) =>
-      createElement(tagName, ...args);
+  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
   var a = createElementFn("a");
   var abbr = createElementFn("abbr");
   var address = createElementFn("address");
@@ -288,9 +172,119 @@
     }
   }
 
+  // src/util.ts
+  var runningId = 0;
+  function createId(id) {
+    return `${id}-${runningId++}`;
+  }
+  function copyAndSet(obj, path, value) {
+    const segments = Array.isArray(path) ? path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2) : path === "" ? [] : path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
+    if (segments.length === 0) return value;
+    const parents = [];
+    let cur = obj;
+    parents.push(cur);
+    for (const seg of segments) {
+      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
+      parents.push(cur);
+    }
+    let newChild = value;
+    for (let i2 = segments.length - 1; i2 >= 0; i2--) {
+      const key = segments[i2];
+      const origParent = parents[i2];
+      let newParent;
+      if (Array.isArray(origParent)) {
+        newParent = origParent.slice();
+      } else if (origParent !== null && typeof origParent === "object") {
+        newParent = { ...origParent };
+      } else {
+        newParent = typeof key === "number" ? [] : {};
+      }
+      if (Array.isArray(newParent) && typeof key === "number") {
+        if (key >= newParent.length) {
+          newParent.length = key + 1;
+        }
+      }
+      newParent[key] = newChild;
+      newChild = newParent;
+    }
+    return newChild;
+  }
+
+  // src/channel.ts
+  var Channel = class {
+    constructor(name) {
+      this.subs = /* @__PURE__ */ new Set();
+      this.idTxt = (txt) => `${this.id}: ${txt}`;
+      this.id = createId(name);
+    }
+    subscribe(fn) {
+      this.subs.add(fn);
+      return () => {
+        this.unsubscribe(fn);
+      };
+    }
+    subscribeFn() {
+      return (fn) => this.subscribe(fn);
+    }
+    // subscribe once: handler auto-unsubscribe after first invocation
+    once(fn) {
+      const unsub = () => this.unsubscribe(wrapper);
+      const wrapper = (...args) => {
+        unsub();
+        fn(...args);
+      };
+      this.subs.add(wrapper);
+      return unsub;
+    }
+    unsubscribe(fn) {
+      this.subs.delete(fn);
+    }
+    // synchronous publish — invokes handlers and doesn't wait for Promises
+    publish(...args) {
+      for (const fn of Array.from(this.subs)) {
+        try {
+          fn(...args);
+        } catch (err) {
+          console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err);
+        }
+      }
+    }
+    // asynchronous publish — waits for all subscribers; rejects if any rejects
+    async publishAsync(...args) {
+      const promises = Array.from(this.subs).map(async (fn) => fn(...args));
+      const settled = await Promise.allSettled(promises);
+      const rejections = settled.filter((s2) => s2.status === "rejected");
+      if (rejections.length) {
+        const err = new Error(`${rejections.length} subscriber(s) failed`);
+        err.details = rejections.map((r) => r.reason);
+        throw err;
+      }
+    }
+    destroy() {
+      this.subs.clear();
+    }
+  };
+  var ChannelRegistry = class {
+    constructor() {
+      this.map = /* @__PURE__ */ new Map();
+    }
+    get(name) {
+      let ch = this.map.get(name);
+      if (!ch) {
+        ch = new Channel(String(name));
+        this.map.set(name, ch);
+      }
+      return ch;
+    }
+    destroy() {
+      for (const ch of this.map.values()) ch.destroy();
+      this.map.clear();
+    }
+  };
+
   // src/state.ts
-  function shallowEqual(a2, b3) {
-    return a2 === b3;
+  function shallowEqual(a2, b2) {
+    return a2 === b2;
   }
   function createController(options) {
     const { name = "state", weakRef = false } = options != null ? options : {};
@@ -312,7 +306,7 @@
       describe() {
         return {
           eventListeners,
-          name: stateId,
+          name: stateId
         };
       },
       refresh() {
@@ -325,14 +319,16 @@
       onDestroy(cb) {
         if (destroyed) {
           cb();
-          return () => {};
+          return () => {
+          };
         }
         return onDestroy.subscribe(cb);
       },
       addToDestroy(target) {
         if (destroyed) {
           target.destroy();
-          return () => {};
+          return () => {
+          };
         }
         destroyables.add(target);
         return () => destroyables.delete(target);
@@ -378,18 +374,18 @@
             name: `${name2}: <${node.nodeName}>.${type} -> ${stateId}`,
             type: "dom",
             source: new WeakRef(node),
-            weakRefUnsub: new WeakRef(unsub),
+            weakRefUnsub: new WeakRef(unsub)
           });
         } else {
           eventSources.push({
             name: `${name2}: <${node.nodeName}>.${type} -> ${stateId}`,
             type: "dom",
             source: new WeakRef(node),
-            unsub,
+            unsub
           });
         }
         return unsub;
-      },
+      }
     };
     return state;
   }
@@ -423,9 +419,143 @@
       onValueChange(cb) {
         if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
         return onChange.subscribe(cb);
-      },
+      }
     };
     return state;
+  }
+
+  // src/demos/simpleDemos.ts
+  function basicCounter() {
+    const state = createState({ total: 0 });
+    function infoText(state2) {
+      const t = text();
+      state2.onValueChange((obj) => t.nodeValue = `${obj.total}`);
+      return t;
+    }
+    state.refresh();
+    return p("Total: ", infoText(state), {
+      onclick: () => state.modify((cur) => ({ total: cur.total + 1 }))
+    });
+  }
+
+  // src/demos/stateDemo.ts
+  function testTableCounter() {
+    const createNodes = () => {
+      const info = text();
+      const root = p("Click to update counter", info);
+      return { info, root };
+    };
+    function counter(state = createState({ total: 0 })) {
+      const nodes = createNodes();
+      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
+      state.onValueChange((obj) => {
+        console.log(state.describe());
+        return nodes.info.nodeValue = `Counter: ${obj.total}`;
+      });
+      state.refresh();
+      return nodes;
+    }
+    return counter().root;
+  }
+
+  // src/demos/stateOnDestroyDemo.ts
+  function onDestroyTwoNodes() {
+    const state = createState({ total: 123 });
+    const info = (txt, s2) => {
+      const t = text();
+      s2.onValueChange((obj) => t.nodeValue = `${txt}: ${obj.total}`);
+      s2.onDestroy(() => t.nodeValue = `${txt}: state destroyed`);
+      return p(t);
+    };
+    const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
+    state.refresh();
+    return root;
+  }
+  function onDestroyParentDemo() {
+    const parent = createState({});
+    const state = createState({ total: 0 });
+    state.onDestroy(() => {
+      root.replaceChildren(stateInfo, parentInfo);
+      stateInfo.nodeValue = "State destroyed!";
+    });
+    parent.onDestroy(() => {
+      parentInfo.nodeValue = "Parent was destroyed!";
+    });
+    parent.addToDestroy(state);
+    state.refresh();
+    const stateInfo = text("State ready");
+    const parentInfo = text("Parent ready");
+    const root = p(p("Not destroyed. Click me!", { onclick: parent.destroy }), stateInfo, parentInfo);
+    return root;
+  }
+
+  // src/demos/channelsDemo.ts
+  function channelsDemo() {
+    const state = createState({ total: 0 });
+    const channels = new ChannelRegistry();
+    const channel = channels.get("test");
+    let num = 0;
+    state.onDestroy(() => {
+      root.replaceChildren(t1);
+      t1.nodeValue = "T1, not destroyed!";
+    });
+    channel.subscribe((payload) => {
+      t1.nodeValue = `Counter ${payload.num}`;
+    });
+    state.refresh();
+    const t1 = text("T1");
+    const root = p(
+      p("Click me to send message!", {
+        onclick: () => channel.publish({ num: num++ })
+      }),
+      t1
+    );
+    return root;
+  }
+
+  // src/demos/simpleFormDemo.ts
+  function simpleForm() {
+    const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", (ev) => {
+      if (validate) {
+        if (validate(node.value)) {
+          return;
+        }
+      }
+      state.modify((cur) => ({ ...cur, [key]: node.value }));
+    });
+    function simpleForm2(formData = createState({ a: "23", b: "234" })) {
+      const i1 = input();
+      const i2 = input();
+      const info = pre();
+      const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+      const log = (s2) => {
+        info.append(`${s2}
+`);
+        return true;
+      };
+      domTextInput(formData, "i1", i1, "a");
+      domTextInput(
+        formData,
+        "i2",
+        i2,
+        "b",
+        (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`)
+      );
+      formData.onValueChange(({ a: a2, b: b2 }) => {
+        i1.value = a2;
+        i2.value = b2;
+        log(`Form data: ${a2} ${b2}`);
+      });
+      const submitController = createController();
+      submitController.addDomEvent("submit", root, "submit", (ev) => {
+        ev.preventDefault();
+        const { a: a2, b: b2 } = formData.get();
+        log(`Form submitted ${a2} ${b2}`);
+      });
+      formData.refresh();
+      return root;
+    }
+    return simpleForm2();
   }
 
   // src/form.ts
@@ -437,7 +567,7 @@
       this.validate = validate;
     }
   };
-  function domEvent(node, key, map2, validate) {
+  function formEvent(node, key, map2, validate) {
     return new FormsInput(node, key, map2, validate);
   }
   function isFormsInput(x) {
@@ -503,187 +633,71 @@
           ev.preventDefault();
           listener(ev);
         },
-        options2,
+        options2
       );
     };
-    return { ...state, onsubmit };
+    return { ...state, onSubmit: onsubmit };
+  }
+
+  // src/demos/formDemo.ts
+  function createFormStateDemo(init = { a: 23, b: 10 }) {
+    const i1 = input();
+    const i2 = input();
+    const info = pre();
+    const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+    const log = (s2) => info.append(`${s2}
+`);
+    const isDividable = (prefix, divider) => {
+      return (n) => {
+        const isOk = n % divider === 0;
+        if (isOk) {
+          return true;
+        }
+        log(`${prefix} ${n} is not dividable by ${divider}`);
+        return false;
+      };
+    };
+    const formData = createFormState(
+      {
+        a: formEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
+        b: formEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5))
+      },
+      {
+        init,
+        validate: ({ a: a2, b: b2 }) => {
+          const isOk = a2 + b2 === 15;
+          if (isOk) {
+            return true;
+          }
+          log(`Form full state validation : ${a2}0${b2}=${a2 + b2} is not 15`);
+          return false;
+        }
+      }
+    );
+    formData.onValueChange(({ a: a2, b: b2 }) => {
+      log(`Form data set to: a:${a2} b:${b2}`);
+    });
+    formData.onSubmit(root, (ev) => {
+      const { a: a2, b: b2 } = formData.get();
+      log(`Form submitted ${a2} ${b2}`);
+    });
+    formData.refresh();
+    return root;
   }
 
   // src/ki-frame-demo.ts
   var demo = (title2, fn) => ({ title: title2, fn });
   var demos = [
-    demo("counter(), naive 2010 DOM node version", function naiveCounter() {
-      const state = createState({ total: 0 });
-      function infoText(state2) {
-        const t = text();
-        state2.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
-        return t;
-      }
-      state.refresh();
-      return p("Total: ", infoText(state), {
-        onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
-      });
-    }),
-    demo("testable counter", function testTableCounter() {
-      const createNodes = () => {
-        const info = text();
-        const root = p("Click to update counter", info);
-        return { info, root };
-      };
-      function counter(state = createState({ total: 0 })) {
-        const nodes = createNodes();
-        state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
-        state.onValueChange((obj) => {
-          console.log(state.describe());
-          return (nodes.info.nodeValue = `Counter: ${obj.total}`);
-        });
-        state.refresh();
-        return nodes;
-      }
-      return counter().root;
-    }),
-    demo("onDestroyDemo", function onDestroyTwoNodes() {
-      const state = createState({ total: 123 });
-      const info = (txt, s2) => {
-        const t = text();
-        s2.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
-        s2.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`));
-        return p(t);
-      };
-      const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
-      state.refresh();
-      return root;
-    }),
-    demo("onDestroyParentDemo", function onDestroyParentDemo() {
-      const parent = createState({});
-      const state = createState({ total: 0 });
-      state.onDestroy(() => {
-        root.replaceChildren(stateInfo, parentInfo);
-        stateInfo.nodeValue = "State destroyed!";
-      });
-      parent.onDestroy(() => {
-        parentInfo.nodeValue = "Parent was destroyed!";
-      });
-      parent.addToDestroy(state);
-      state.refresh();
-      const stateInfo = text("State ready");
-      const parentInfo = text("Parent ready");
-      const root = p(p("Not destroyed. Click me!", { onclick: parent.destroy }), stateInfo, parentInfo);
-      return root;
-    }),
-    demo("channelsDemo", function channelsDemo() {
-      const state = createState({ total: 0 });
-      const channels = new ChannelRegistry();
-      const channel = channels.get("test");
-      let num = 0;
-      state.onDestroy(() => {
-        root.replaceChildren(t1);
-        t1.nodeValue = "T1, not destroyed!";
-      });
-      channel.subscribe((payload) => {
-        t1.nodeValue = `Counter ${payload.num}`;
-      });
-      state.refresh();
-      const t1 = text("T1");
-      const root = p(
-        p("Click me to send message!", {
-          onclick: () => channel.publish({ num: num++ }),
-        }),
-        t1,
-      );
-      return root;
-    }),
-    demo("simple form - form handling with state", function naiveForm() {
-      const domTextInput = (state, name, node, key, validate) =>
-        state.addDomEvent(name, node, "keyup", (ev) => {
-          if (validate) {
-            if (validate(node.value)) {
-              return;
-            }
-          }
-          state.modify((cur) => ({ ...cur, [key]: node.value }));
-        });
-      function simpleForm(formData = createState({ a: "23", b: "234" })) {
-        const i1 = input();
-        const i2 = input();
-        const info = pre();
-        const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
-        const log = (s2) => {
-          info.append(`${s2}
-`);
-          return true;
-        };
-        domTextInput(formData, "i1", i1, "a");
-        domTextInput(
-          formData,
-          "i2",
-          i2,
-          "b",
-          (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`),
-        );
-        formData.onValueChange(({ a: a2, b: b3 }) => {
-          i1.value = a2;
-          i2.value = b3;
-          log(`Form data: ${a2} ${b3}`);
-        });
-        const submitController = createController();
-        submitController.addDomEvent("submit", root, "submit", (ev) => {
-          ev.preventDefault();
-          const { a: a2, b: b3 } = formData.get();
-          log(`Form submitted ${a2} ${b3}`);
-        });
-        formData.refresh();
-        return root;
-      }
-      return simpleForm();
-    }),
-    demo("form handling with createFormState", function createFormStateDemo(init = { a: 23, b: 10 }) {
-      const i1 = input();
-      const i2 = input();
-      const info = pre();
-      const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
-      const log = (s2) =>
-        info.append(`${s2}
-`);
-      const isDividable = (prefix, divider) => {
-        return (n) => {
-          const isOk = n % divider === 0;
-          if (isOk) {
-            return true;
-          }
-          log(`${prefix} ${n} is not dividable by ${divider}`);
-          return false;
-        };
-      };
-      const formData = createFormState(
-        {
-          a: domEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
-          b: domEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5)),
-        },
-        {
-          init,
-          validate: ({ a: a2, b: b3 }) => {
-            const isOk = a2 + b3 === 15;
-            if (isOk) {
-              return true;
-            }
-            log(`Form full state validation : ${a2}0${b3}=${a2 + b3} is not 15`);
-            return false;
-          },
-        },
-      );
-      formData.onValueChange(({ a: a2, b: b3 }) => {
-        log(`Form data set to: a:${a2} b:${b3}`);
-      });
-      formData.onsubmit(root, (ev) => {
-        const { a: a2, b: b3 } = formData.get();
-        log(`Form submitted ${a2} ${b3}`);
-      });
-      formData.refresh();
-      return root;
-    }),
+    demo("counter(), naive 2010 DOM node version", basicCounter),
+    demo("testable counter", testTableCounter),
+    demo("onDestroyDemo", onDestroyTwoNodes),
+    demo("onDestroyParentDemo", onDestroyParentDemo),
+    demo("channelsDemo", channelsDemo),
+    demo("simple form - form handling with state", simpleForm),
+    demo("form handling with createFormState", createFormStateDemo)
   ];
   function demolist(demos2) {
+    const demoRowFunctionStringSearchIndex = demos2.map((demo2) => demo2.fn.toString().toLowerCase());
     const rows = demos2.map((demo2) => {
       const target = td();
       const src = td();
@@ -691,17 +705,14 @@
         onclick: () => {
           target.replaceChildren(demo2.fn());
           src.replaceChildren(pre(demo2.fn.toString()));
-        },
+        }
       });
       const row = tr(td(launchDemo, br(), demo2.title), src, target);
       row.style = "vertical-align: baseline";
       return row;
     }, demo);
-    const demoRowFunctionStringSearchIndex = demos2.map((demo2) => demo2.fn.toString().toLowerCase());
-    const state = createState();
-    const search2 = input();
-    state.addDomEvent("search", search2, "keyup", () => {
-      const searchString = search2.value.toLowerCase().trim();
+    function filterDemos(s2) {
+      const searchString = s2.toLowerCase().trim();
       demoRowFunctionStringSearchIndex.forEach((demoFn, index) => {
         if (searchString.length > 2) {
           rows[index].hidden = demoFn.indexOf(searchString) === -1;
@@ -710,7 +721,15 @@
           rows[index].hidden = false;
         }
       });
+    }
+    const state = createState();
+    const search2 = input({ type: "search", value: location.hash.substring(1) });
+    state.addDomEvent("search", search2, "keyup", () => {
+      const s2 = search2.value;
+      location.hash = s2;
+      filterDemos(s2);
     });
+    filterDemos(location.hash.substring(1));
     return div(search2, table(rows));
   }
   setElementToId("app", demolist(demos));
