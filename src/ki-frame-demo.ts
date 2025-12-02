@@ -1,11 +1,11 @@
-import {br, button, div, input, pre, setElementToId, table, td, tr} from "./domBuilder";
-import {createState} from "./state";
-import {basicCounter} from "./demos/simpleDemos";
-import {testTableCounter} from "./demos/stateDemo";
-import {onDestroyParentDemo, onDestroyTwoNodes} from "./demos/stateOnDestroyDemo";
-import {channelsDemo} from "./demos/channelsDemo";
-import {simpleForm} from "./demos/simpleFormDemo";
-import {createFormStateDemo} from "./demos/formDemo";
+import { channelsDemo } from "./demos/channelsDemo";
+import { createFormStateDemo } from "./demos/formDemo";
+import { basicCounter } from "./demos/simpleDemos";
+import { simpleForm } from "./demos/simpleFormDemo";
+import { testTableCounter } from "./demos/stateDemo";
+import { onDestroyParentDemo, onDestroyTwoNodes } from "./demos/stateOnDestroyDemo";
+import { br, button, div, input, pre, setElementToId, table, td, tr } from "./domBuilder";
+import { createState } from "./state";
 
 interface Demo {
   title: string;
@@ -53,13 +53,13 @@ function demolist(demos: Demo[]) {
   }
 
   const state = createState();
-  const search = input({type: "search", value: location.hash.substring(1)});
+  const search = input({ type: "search", value: location.hash.substring(1) });
   state.addDomEvent("search", search, "keyup", () => {
     const s = search.value;
-    location.hash = s
+    location.hash = s;
     filterDemos(s);
   });
-  filterDemos(location.hash.substring(1))
+  filterDemos(location.hash.substring(1));
   return div(search, table(rows));
 }
 

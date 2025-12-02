@@ -1,13 +1,13 @@
-import {createState} from "../state";
-import type {State} from "../types";
-import {p, text} from "../domBuilder";
+import { p, text } from "../domBuilder";
+import { createState } from "../state";
+import type { State } from "../types";
 
 interface Total {
   total: number;
 }
 
 export function basicCounter() {
-  const state = createState({total: 0});
+  const state = createState({ total: 0 });
 
   function infoText(state: State<Total>) {
     const t = text();
@@ -18,6 +18,6 @@ export function basicCounter() {
   // renders initial content by triggering state.onChange() subscribers
   state.refresh();
   return p("Total: ", infoText(state), {
-    onclick: () => state.modify((cur) => ({total: cur.total + 1})),
+    onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
   });
 }

@@ -1,6 +1,6 @@
-import {createState, type StateOptions} from "./state";
-import {type FormState} from "./types";
-import {copyAndSet} from "./util";
+import { createState, type StateOptions } from "./state";
+import type { FormState } from "./types";
+import { copyAndSet } from "./util";
 
 class FormsInput<N extends Node, K extends keyof HTMLElementEventMap, V = string> {
   constructor(

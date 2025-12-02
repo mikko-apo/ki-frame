@@ -1,5 +1,5 @@
-import {p, text} from "../domBuilder";
-import {createState} from "../state";
+import { p, text } from "../domBuilder";
+import { createState } from "../state";
 
 export function testTableCounter() {
   // DOM structure setup for testing
@@ -24,4 +24,3 @@ export function testTableCounter() {
 
   return counter().root;
 }
-

@@ -1,6 +1,6 @@
-import {createState} from "../state";
-import type {State} from "../types";
-import {button, p, text} from "../domBuilder";
+import { button, p, text } from "../domBuilder";
+import { createState } from "../state";
+import type { State } from "../types";
 
 interface Total {
   total: number;

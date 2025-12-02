@@ -1,5 +1,5 @@
-import {form, input, pre} from "../domBuilder";
-import {createFormState, formEvent} from "../form";
+import { form, input, pre } from "../domBuilder";
+import { createFormState, formEvent } from "../form";
 
 export function createFormStateDemo(init = { a: 23, b: 10 }) {
   // define dom elements
