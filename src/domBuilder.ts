@@ -1,15 +1,10 @@
 import { WrappedNode } from "./types";
 
-type CreateElementArg<E extends HTMLElement> =
-  | HTMLElement
-  | string
-  | Array<HTMLElement>
-  | Partial<E>
-  | Text
-  | WrappedNode;
-type CreateElementArgs<E extends HTMLElement> = CreateElementArg<E>[];
+type CreateElementTypes = HTMLElement | Text | string | WrappedNode;
+type CreateElementArg<N extends Node> = CreateElementTypes | Array<CreateElementTypes> | Partial<N>;
+export type CreateElementArgs<N extends Node> = CreateElementArg<N>[];
 
-function addItems<E extends HTMLElement>(element: HTMLElement, ...args: CreateElementArgs<E>) {
+function addItems<N extends Node>(element: HTMLElement, ...args: CreateElementArgs<N>) {
   args.forEach((arg) => {
     if (Array.isArray(arg)) {
       addItems(element, ...arg);

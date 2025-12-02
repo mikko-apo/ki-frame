@@ -1,5 +1,5 @@
 import { Channel, type Unsub } from "./channel";
-import type {Controller, Destroyable, EventListenerInfo, EventSource, State} from "./types";
+import type { Controller, Destroyable, EventListenerInfo, EventSource, State } from "./types";
 import { createId } from "./util";
 
 type ChangeCb<T> = (obj: T, old: T) => void;
@@ -9,15 +9,15 @@ function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-interface StateOptions {
+export interface StateOptions {
   name?: string;
-  weakRef?: boolean
+  weakRef?: boolean;
 }
 
 export function createController(options?: StateOptions): Controller {
   const { name = "state", weakRef = false } = options ?? {};
   const stateId = createId(name);
-  const getId = () => stateId
+  const getId = () => stateId;
   let destroyed = false;
 
   const onChange = new Channel<[]>(`${stateId}-onChange`);
@@ -110,7 +110,7 @@ export function createController(options?: StateOptions): Controller {
       type: K,
       listener: (ev: HTMLElementEventMap[K]) => void | EventListenerObject | null,
       options?: boolean | AddEventListenerOptions,
-    ): void {
+    ): Unsub {
       node.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
       const unsub = () =>
         node.removeEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
@@ -129,6 +129,7 @@ export function createController(options?: StateOptions): Controller {
           unsub,
         });
       }
+      return unsub;
     },
   };
   return state;
@@ -157,7 +158,7 @@ export function createState<Value>(initialValue?: Value, options?: StateOptions)
       notifyChange(value, old);
     },
 
-    modify(fn: (cur: Value) => Value) {
+    modify(fn: (cur: Readonly<Value>) => Value) {
       if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot modify"));
       const next = fn(value);
       state.set(next);
@@ -167,7 +168,7 @@ export function createState<Value>(initialValue?: Value, options?: StateOptions)
       notifyChange(value, value);
     },
 
-    onValueChange(cb: ChangeCb<Value>): Unsub {
+    onValueChange(cb: ChangeCb<Readonly<Value>>): Unsub {
       if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
       return onChange.subscribe(cb);
     },

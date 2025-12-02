@@ -1,4 +1,4 @@
-import type {Unsub} from "./channel";
+import type { Unsub } from "./channel";
 
 export interface Destroyable {
   destroy(): void;
@@ -53,11 +53,11 @@ export interface Controller extends Destroyable {
 
   addDomEvent<K extends keyof HTMLElementEventMap>(
     name: string,
-    node: Node,
+    node: EventTarget,
     type: K,
     listener: (ev: HTMLElementEventMap[K]) => any,
     options?: boolean | AddEventListenerOptions,
-  ): void;
+  ): Unsub;
 
   //  remove(node: Node): void
   //  onDestroyRemove<T extends Node>(node: T): T
@@ -68,12 +68,23 @@ export interface State<T> extends Controller {
 
   set(newObj: T): void;
 
-  modify(fn: (cur: T) => T): void;
+  modify(fn: (cur: Readonly<T>) => T): void;
 
   /** Called whenever the state object changes. Returns an unsubscribe function. */
-  onValueChange(cb: (obj: T, old: T) => void): Unsub;
+  onValueChange(cb: (obj: Readonly<T>, old: Readonly<T>) => void): Unsub;
 }
 
+export interface FormState<T> extends State<T> {
+  onSubmit(
+    root: EventTarget,
+    listener: (ev: HTMLElementEventMap["submit"]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): Unsub;
+}
+
+/**
+ * Extended dom node APIs can create objects that extend from this class. node() returns the underlying dom node object
+ */
 export class WrappedNode {
   private _node: Node;
 
