@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "bundle": "esbuild src/ki-frame-demo.ts --bundle --outfile=docs/ki-frame-demo.js --platform=browser --target=es2019",
+    "bundle": "esbuild src/demos/ki-frame-demo.ts --bundle --outfile=docs/ki-frame-demo.js --platform=browser --target=es2019",
     "build": "npm run typecheck && npm run bundle",
     "dev": "tsc -w -p .",
     "format": "biome check --write .",

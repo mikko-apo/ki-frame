@@ -88,3 +88,7 @@ export function copyAndSet<T = any>(obj: any, path: Path, value: any): T {
 
   return newChild as T;
 }
+
+export function isDefined<T>(item: T | null | undefined): item is T {
+  return item !== undefined && item !== null;
+}

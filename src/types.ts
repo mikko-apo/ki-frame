@@ -4,6 +4,18 @@ export interface Destroyable {
   destroy(): void;
 }
 
+export interface TimeoutInfo extends Destroyable {
+  type: "timeout";
+  at: number;
+}
+
+export interface FetchInfo extends Destroyable {
+  type: "fetch";
+  url: string;
+}
+
+export type Destroyables = Destroyable | TimeoutInfo | FetchInfo;
+
 export interface EventListenerInfo<K extends keyof HTMLElementEventMap> {
   name: string;
   weakRef: WeakRef<{
@@ -47,7 +59,7 @@ export interface Controller extends Destroyable {
   onDestroy(cb: () => void): Unsub;
 
   /** If parent.destroy() is called, parent will call childState.destroy() */
-  addToDestroy(target: Destroyable): Unsub;
+  addToDestroy(target: Destroyables): Unsub;
 
   addToParentDestroy<T>(parent: State<T>): Unsub;
 
@@ -61,6 +73,20 @@ export interface Controller extends Destroyable {
 
   //  remove(node: Node): void
   //  onDestroyRemove<T extends Node>(node: T): T
+
+  timeout(fn: Unsub, at?: number): Unsub;
+
+  fetch(
+    url: string,
+    fetchOptions?: RequestInit & { timeoutMs?: number },
+  ): Destroyable & { response: Promise<Response> };
+
+  fetch<T>(
+    url: string,
+    fetchOptions?: RequestInit & {
+      timeoutMs?: number;
+    },
+  ): Destroyable & { response: Promise<T> };
 }
 
 export interface State<T> extends Controller {

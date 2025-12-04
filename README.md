@@ -39,6 +39,9 @@ like it's 2010 again, but with better tooling.
         * manual
             * registration + state.destroy()
             * see [Use createState()](#use-createstate)
+            * works by keeping list of externally created references which state can automatically remove:
+              * dom listeners: state.addDomEvent()
+              * external processes: state.fetch(), state.timeout()
 * [form.ts](src/form.ts)
     * domEvent() and createFormState(inputsAsStateTree) make it easy to create both simple and complex forms
     * note: the first version of the API is unstable and will ~~change~~ improve
@@ -113,8 +116,12 @@ like it's 2010 again, but with better tooling.
         * state/group state available to field level
         * field validation issues available to root level
         * mapping errors as validation issues
-* fetch and XHR integration
-    * state.destroy() aborts ongoing fetches and XHRs
+* fetch
+    * retry strategy: retries, delay
+* timeout
+  * execute fn and remove timeout before it triggers
+* XHR integration
+    * abort
 * router
     * tigher integration with browser urls
     * initialize application based on route parameters
