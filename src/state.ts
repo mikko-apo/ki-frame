@@ -1,8 +1,17 @@
-import { Channel, type Unsub } from "./channel";
-import type { Controller, Destroyable, EventListenerInfo, EventSource, State } from "./types";
-import { createId } from "./util";
+import {Channel, type Unsub} from "./channel";
+import type {
+  Controller,
+  Destroyable,
+  Destroyables,
+  EventListenerInfo,
+  EventSource,
+  FetchInfo,
+  State,
+  TimeoutInfo,
+} from "./types";
+import {createId} from "./util";
 
-type ChangeCb<T> = (obj: T, old: T) => void;
+type ChangeCb<T> = (obj: Readonly<T>, old: T) => void;
 type DestroyCb = () => void;
 
 function shallowEqual(a: unknown, b: unknown) {
@@ -22,7 +31,7 @@ export function createController(options?: StateOptions): Controller {
 
   const onChange = new Channel<[]>(`${stateId}-onChange`);
   const onDestroy = new Channel<[]>(`${stateId}-onDestroy`);
-  const destroyables = new Set<Destroyable>();
+  const destroyables = new Set<Destroyables>();
   const notifyChange = () => onChange.publish();
 
   const idTxt = (txt: string) => `${stateId}: ${txt}`;
@@ -59,7 +68,7 @@ export function createController(options?: StateOptions): Controller {
       return onDestroy.subscribe(cb);
     },
 
-    addToDestroy(target: Destroyable): Unsub {
+    addToDestroy(target: Destroyables): Unsub {
       if (destroyed) {
         target.destroy();
         return () => {};
@@ -131,6 +140,58 @@ export function createController(options?: StateOptions): Controller {
       }
       return unsub;
     },
+    timeout(fn: Unsub, at = 0): Unsub {
+      const id = setTimeout(() => {
+        destroy();
+        fn();
+      }, at);
+      const destroy = () => {
+        clearTimeout(id);
+        destroyables.delete(info);
+      };
+      const info: TimeoutInfo = {
+        type: "timeout",
+        at: at + Date.now(),
+        destroy,
+      };
+      state.addToDestroy(info);
+      return destroy;
+    },
+    fetch<T>(
+      url: string,
+      fetchOptions?: RequestInit & {
+        timeoutMs?: number;
+        map?: (res: Promise<Response>) => T | Promise<T>;
+      },
+    ): Destroyable & { response: Promise<T> | Promise<Response> } {
+      const { timeoutMs, map, ...fetchInit } = fetchOptions ?? {};
+      const controller = new AbortController();
+
+      const response = fetch(url, { ...fetchInit, signal: controller.signal });
+
+      // destroy is called when:
+      // - returned destroy has been called by fetch's caller
+      // - promise has completed
+      // - clear timer
+      // - state.destroy() has been called
+      const destroy = () => {
+        controller.abort();
+        timeoutUnsub?.();
+        destroyables.delete(info);
+      };
+      const timeoutUnsub = fetchOptions?.timeoutMs ? state.timeout(destroy, fetchOptions.timeoutMs) : undefined;
+      const info: FetchInfo = { type: "fetch", url, destroy };
+      state.addToDestroy(info);
+      response.finally(destroy);
+
+      if (map) {
+        const mappedPromise: Promise<T> = (async () => {
+          return map(response);
+        })();
+        return { response: mappedPromise, destroy };
+      }
+      return { response, destroy };
+    },
   };
   return state;
 }
@@ -168,7 +229,7 @@ export function createState<Value>(initialValue?: Value, options?: StateOptions)
       notifyChange(value, value);
     },
 
-    onValueChange(cb: ChangeCb<Readonly<Value>>): Unsub {
+    onValueChange(cb: ChangeCb<Value>): Unsub {
       if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
       return onChange.subscribe(cb);
     },

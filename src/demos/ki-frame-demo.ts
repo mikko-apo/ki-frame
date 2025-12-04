@@ -1,11 +1,13 @@
-import { channelsDemo } from "./demos/channelsDemo";
-import { createFormStateDemo } from "./demos/formDemo";
-import { basicCounter } from "./demos/simpleDemos";
-import { simpleForm } from "./demos/simpleFormDemo";
-import { testTableCounter } from "./demos/stateDemo";
-import { onDestroyParentDemo, onDestroyTwoNodes } from "./demos/stateOnDestroyDemo";
-import { br, button, div, input, pre, setElementToId, table, td, tr } from "./domBuilder";
-import { createState } from "./state";
+import { br, button, div, input, pre, setElementToId, table, td, tr } from "../domBuilder";
+import { createState } from "../state";
+import { channelsDemo } from "./channelsDemo";
+import { createFormStateDemo } from "./formDemo";
+import { basicCounter } from "./simpleDemos";
+import { simpleForm } from "./simpleFormDemo";
+import { testTableCounter } from "./stateDemo";
+import { stateFetchDemo } from "./stateFetchDemo";
+import { onDestroyParentDemo, onDestroyTwoNodes } from "./stateOnDestroyDemo";
+import {stateTimeoutDemo} from "./stateTimeoutDemo";
 
 interface Demo {
   title: string;
@@ -22,6 +24,8 @@ const demos: Demo[] = [
   demo("channelsDemo", channelsDemo),
   demo("simple form - form handling with state", simpleForm),
   demo("form handling with createFormState", createFormStateDemo),
+  demo("fetch examples", stateFetchDemo),
+  demo("timeout example", stateTimeoutDemo),
 ];
 
 function demolist(demos: Demo[]) {
