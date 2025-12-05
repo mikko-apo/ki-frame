@@ -288,6 +288,45 @@
     }
   };
 
+  // src/promiseDestroy.ts
+  var PromiseDestroy = class _PromiseDestroy {
+    constructor(promise, destroy = () => {}) {
+      this.promise = promise;
+      this.destroy = destroy;
+    }
+    /**
+     * Promise.then implementation. Can be used to map the response to another value
+     *
+     * - Delegates to the internal `response` promise.
+     * - Returns a NEW FetchReturn whose `response` is the mapped promise.
+     * - If no handlers are provided, returns `this` (typed via cast).
+     */
+    then(onfulfilled, onrejected) {
+      if (!onfulfilled && !onrejected) {
+        return this.promise;
+      }
+      return this.promise.then(onfulfilled, onrejected);
+    }
+    catch(onrejected) {
+      if (!onrejected) {
+        return this;
+      }
+      return this.promise.catch(onrejected);
+    }
+    finally(onfinally) {
+      return this.promise.finally(onfinally);
+    }
+    get [Symbol.toStringTag]() {
+      return _PromiseDestroy.name;
+    }
+    /**
+     * Optional: explicit toString which mirrors Object.prototype.toString
+     */
+    toString() {
+      return Object.prototype.toString.call(this);
+    }
+  };
+
   // src/state.ts
   function shallowEqual(a2, b2) {
     return a2 === b2;
@@ -408,9 +447,18 @@
         return destroy;
       },
       fetch(url, fetchOptions) {
-        const { timeoutMs, map: map2, ...fetchInit } = fetchOptions != null ? fetchOptions : {};
+        const { timeoutMs, map: map2, assertOk = true, ...fetchInit } = fetchOptions != null ? fetchOptions : {};
         const controller = new AbortController();
         const response = fetch(url, { ...fetchInit, signal: controller.signal });
+        const maybeOkResponse = assertOk
+          ? response.then((response2) => {
+              if ((typeof assertOk === "function" && assertOk(response2) === false) || !response2.ok) {
+                const cause = { errorResponse: response2 };
+                throw cause;
+              }
+              return response2;
+            })
+          : response;
         const destroy = () => {
           controller.abort();
           timeoutUnsub == null ? void 0 : timeoutUnsub();
@@ -421,14 +469,14 @@
           : void 0;
         const info = { type: "fetch", url, destroy };
         state.addToDestroy(info);
-        response.finally(destroy);
+        maybeOkResponse.finally(destroy);
         if (map2) {
           const mappedPromise = (async () => {
-            return map2(response);
+            return map2(maybeOkResponse);
           })();
-          return { response: mappedPromise, destroy };
+          return new PromiseDestroy(mappedPromise, destroy);
         }
-        return { response, destroy };
+        return new PromiseDestroy(maybeOkResponse, destroy);
       },
     };
     return state;
@@ -468,28 +516,49 @@
     return state;
   }
 
-  // src/demos/channelsDemo.ts
-  function channelsDemo() {
-    const state = createState({ total: 0 });
-    const channels = new ChannelRegistry();
-    const channel = channels.get("test");
-    let num = 0;
-    state.onDestroy(() => {
-      root.replaceChildren(t1);
-      t1.nodeValue = "T1, not destroyed!";
+  // src/demos/01_domBuilderStateDemo.ts
+  function domBuilerWithState() {
+    const createNodes = () => {
+      const info = text();
+      const root = p("Click to update counter", info);
+      return { info, root };
+    };
+    function counter(state = createState({ total: 0 })) {
+      const nodes = createNodes();
+      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
+      state.onValueChange((obj) => {
+        nodes.info.nodeValue = `Counter: ${obj.total}`;
+      });
+      state.refresh();
+      return nodes;
+    }
+    return counter().root;
+  }
+
+  // src/fetch.ts
+  function isErrorResponse(item) {
+    return "errorResponse" in item;
+  }
+
+  // src/demos/02_fetchDemo.ts
+  function fetchDemo() {
+    const info = text("Not loaded");
+    const b2 = button("Click me to fetch!");
+    let counter = 0;
+    const setText = (s2) => (info.nodeValue = s2);
+    const handleError = (reason) =>
+      setText(
+        isErrorResponse(reason)
+          ? `There was an error, response.status is ${reason.errorResponse.status}`
+          : `There was an error, response.status is ${reason}`,
+      );
+    const state = createController();
+    state.addDomEvent("start fetch", b2, "click", () => {
+      counter++;
+      setText("Loading...");
+      state.fetch("test.json", { timeoutMs: 1e3 }).then(() => setText(`Loaded ok.`), handleError);
     });
-    channel.subscribe((payload) => {
-      t1.nodeValue = `Counter ${payload.num}`;
-    });
-    state.refresh();
-    const t1 = text("T1");
-    const root = p(
-      p("Click me to send message!", {
-        onclick: () => channel.publish({ num: num++ }),
-      }),
-      t1,
-    );
-    return root;
+    return div(b2, info);
   }
 
   // src/form.ts
@@ -620,6 +689,30 @@
     return root;
   }
 
+  // src/demos/channelsDemo.ts
+  function channelsDemo() {
+    const state = createState({ total: 0 });
+    const channels = new ChannelRegistry();
+    const channel = channels.get("test");
+    let num = 0;
+    state.onDestroy(() => {
+      root.replaceChildren(t1);
+      t1.nodeValue = "T1, not destroyed!";
+    });
+    channel.subscribe((payload) => {
+      t1.nodeValue = `Counter ${payload.num}`;
+    });
+    state.refresh();
+    const t1 = text("T1");
+    const root = p(
+      p("Click me to send message!", {
+        onclick: () => channel.publish({ num: num++ }),
+      }),
+      t1,
+    );
+    return root;
+  }
+
   // src/demos/simpleDemos.ts
   function basicCounter() {
     const state = createState({ total: 0 });
@@ -680,50 +773,6 @@
     return simpleForm2();
   }
 
-  // src/demos/01_stateDemo.ts
-  function testTableCounter() {
-    const createNodes = () => {
-      const info = text();
-      const root = p("Click to update counter", info);
-      return { info, root };
-    };
-    function counter(state = createState({ total: 0 })) {
-      const nodes = createNodes();
-      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
-      state.onValueChange((obj) => {
-        console.log(state.describe());
-        nodes.info.nodeValue = `Counter: ${obj.total}`;
-      });
-      state.refresh();
-      return nodes;
-    }
-    return counter().root;
-  }
-
-  // src/demos/02_fetchDemo.ts
-  function stateFetchDemo() {
-    const info = text();
-    const b2 = button("Click me to fetch!");
-    const state = createState({ text: "Not loaded", counter: 0 });
-    function setText(text3) {
-      state.modify(({ counter }) => {
-        return { text: `${text3}. Count ${counter}`, counter };
-      });
-    }
-    state.addDomEvent("start fetch", b2, "click", (ev) => {
-      state.fetch("test.json", { timeoutMs: 1e3 }).response.then(
-        (response) => {
-          setText(response.ok ? `Loaded ok.` : `Loading failed. Status code: ${response.status}`);
-        },
-        (reason) => setText(`Loading failed due error. '${reason}'`),
-      );
-      state.modify((cur) => ({ text: "Loading", counter: cur.counter + 1 }));
-    });
-    state.onValueChange((obj) => (info.nodeValue = obj.text));
-    state.refresh();
-    return div(b2, info);
-  }
-
   // src/demos/stateOnDestroyDemo.ts
   function onDestroyTwoNodes() {
     const state = createState({ total: 123 });
@@ -769,14 +818,14 @@
   // src/demos/ki-frame-demo.ts
   var demo = (title2, fn) => ({ title: title2, fn });
   var demos = [
+    demo("testable counter", domBuilerWithState),
+    demo("fetch examples", fetchDemo),
+    demo("form handling with createFormState", createFormStateDemo),
     demo("counter(), naive 2010 DOM node version", basicCounter),
-    demo("testable counter", testTableCounter),
     demo("onDestroyDemo", onDestroyTwoNodes),
     demo("onDestroyParentDemo", onDestroyParentDemo),
     demo("channelsDemo", channelsDemo),
     demo("simple form - form handling with state", simpleForm),
-    demo("form handling with createFormState", createFormStateDemo),
-    demo("fetch examples", stateFetchDemo),
     demo("timeout example", stateTimeoutDemo),
   ];
   function demolist(demos2) {

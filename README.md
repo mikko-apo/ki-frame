@@ -4,20 +4,19 @@ Lightweight but all batteries included browser framework for implementing SPAs. 
 like it's 2010 again, but with better tooling.
 
 <!-- TOC -->
-
 * [Sponsors](#sponsors)
 * [Features](#features)
-    * [Roadmap](#roadmap)
+  * [Roadmap](#roadmap)
 * [How are you supposed to use this?](#how-are-you-supposed-to-use-this)
-    * [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
-    * [Use createState()](#use-createstate)
-    * [How to structure code?](#how-to-structure-code)
+  * [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
+  * [Use createState()](#use-createstate)
+  * [How to structure code?](#how-to-structure-code)
     * [Example: counter](#example-counter)
-* [Use createFormState()](#use-createformstate)
-    * [How to test?](#how-to-test)
+  * [Use state.fetch(url)](#use-statefetchurl)
+  * [Use createFormState()](#use-createformstate)
+  * [How to test?](#how-to-test)
 * [What next?](#what-next)
 * [Legend for icons](#legend-for-icons)
-
 <!-- TOC -->
 
 # Sponsors
@@ -267,7 +266,7 @@ There are two ways to create components with ki-frame:
 are already attached to the state / form. Currently they don't, so both approaches are fairly equal in DX.
 For [testing](#how-to-test) test granularity might benefit from either approach.
 
-## Example: counter
+### Example: counter
 
 For a single component:
 
@@ -307,9 +306,9 @@ function counter(state = createState({total: 0})) {
 }
 ```
 
-# Use createFormState()
+Check out the live demos at http://localhost:8000/docs/#createFormState
 
-# Use state.fetch(url)
+## Use state.fetch(url)
 
 state.fetch(url)
 
@@ -347,6 +346,12 @@ export function fetchDemo() {
   return div(b, info);
 }
 ```
+
+Check out the live demos at http://localhost:8000/docs/#fetch
+
+## Use createFormState()
+
+Check out the live demos at http://localhost:8000/docs/#createFormState
 
 ## How to test?
 

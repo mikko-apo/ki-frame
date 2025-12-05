@@ -1,7 +1,7 @@
 import { p, text } from "../domBuilder";
 import { createState } from "../state";
 
-export function testTableCounter() {
+export function domBuilerWithState() {
   // DOM structure setup for testing
   const createNodes = () => {
     const info = text();
