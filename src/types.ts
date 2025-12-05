@@ -1,4 +1,6 @@
 import type { Unsub } from "./channel";
+import type { FetchOptions } from "./fetch";
+import type { PromiseDestroy } from "./promiseDestroy";
 
 export interface Destroyable {
   destroy(): void;
@@ -76,17 +78,14 @@ export interface Controller extends Destroyable {
 
   timeout(fn: Unsub, at?: number): Unsub;
 
-  fetch(
-    url: string,
-    fetchOptions?: RequestInit & { timeoutMs?: number },
-  ): Destroyable & { response: Promise<Response> };
+  fetch(url: string, fetchOptions?: FetchOptions): PromiseDestroy<Response>;
 
   fetch<T>(
     url: string,
-    fetchOptions?: RequestInit & {
-      timeoutMs?: number;
+    fetchOptions?: FetchOptions & {
+      map: (response: Promise<Response>) => T | Promise<T>;
     },
-  ): Destroyable & { response: Promise<T> };
+  ): PromiseDestroy<T>;
 }
 
 export interface State<T> extends Controller {

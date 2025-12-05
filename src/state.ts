@@ -1,18 +1,12 @@
-import {Channel, type Unsub} from "./channel";
-import type {
-  Controller,
-  Destroyable,
-  Destroyables,
-  EventListenerInfo,
-  EventSource,
-  FetchInfo,
-  State,
-  TimeoutInfo,
-} from "./types";
-import {createId} from "./util";
+import { Channel, type Unsub } from "./channel";
+import type { ErrorResponse, FetchOptions } from "./fetch";
+import { PromiseDestroy } from "./promiseDestroy";
+import type { Controller, Destroyables, EventListenerInfo, EventSource, FetchInfo, State, TimeoutInfo } from "./types";
+import { createId } from "./util";
 
 type ChangeCb<T> = (obj: Readonly<T>, old: T) => void;
 type DestroyCb = () => void;
+export type ResponseMapper<T> = (response: Promise<Response>) => T;
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b;
@@ -159,15 +153,23 @@ export function createController(options?: StateOptions): Controller {
     },
     fetch<T>(
       url: string,
-      fetchOptions?: RequestInit & {
-        timeoutMs?: number;
+      fetchOptions?: FetchOptions & {
         map?: (res: Promise<Response>) => T | Promise<T>;
       },
-    ): Destroyable & { response: Promise<T> | Promise<Response> } {
-      const { timeoutMs, map, ...fetchInit } = fetchOptions ?? {};
+    ): PromiseDestroy<T> | PromiseDestroy<Response> {
+      const { timeoutMs, map, assertOk = true, ...fetchInit } = fetchOptions ?? {};
       const controller = new AbortController();
 
       const response = fetch(url, { ...fetchInit, signal: controller.signal });
+      const maybeOkResponse = assertOk
+        ? response.then((response: Response): Response => {
+            if ((typeof assertOk === "function" && assertOk(response) === false) || !response.ok) {
+              const cause: ErrorResponse = { errorResponse: response };
+              throw cause;
+            }
+            return response;
+          })
+        : response;
 
       // destroy is called when:
       // - returned destroy has been called by fetch's caller
@@ -182,15 +184,15 @@ export function createController(options?: StateOptions): Controller {
       const timeoutUnsub = fetchOptions?.timeoutMs ? state.timeout(destroy, fetchOptions.timeoutMs) : undefined;
       const info: FetchInfo = { type: "fetch", url, destroy };
       state.addToDestroy(info);
-      response.finally(destroy);
+      maybeOkResponse.finally(destroy);
 
       if (map) {
         const mappedPromise: Promise<T> = (async () => {
-          return map(response);
+          return map(maybeOkResponse);
         })();
-        return { response: mappedPromise, destroy };
+        return new PromiseDestroy(mappedPromise, destroy);
       }
-      return { response, destroy };
+      return new PromiseDestroy(maybeOkResponse, destroy);
     },
   };
   return state;

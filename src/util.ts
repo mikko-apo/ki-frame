@@ -1,3 +1,5 @@
+import type { ErrorResponse } from "./fetch";
+
 let runningId = 0;
 
 export function createId(id: string) {

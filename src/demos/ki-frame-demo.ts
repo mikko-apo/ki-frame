@@ -1,13 +1,13 @@
 import { br, button, div, input, pre, setElementToId, table, td, tr } from "../domBuilder";
 import { createState } from "../state";
+import { testTableCounter } from "./01_stateDemo";
+import { fetchDemo } from "./02_fetchDemo";
+import { createFormStateDemo } from "./03_formDemo";
 import { channelsDemo } from "./channelsDemo";
-import { createFormStateDemo } from "./formDemo";
 import { basicCounter } from "./simpleDemos";
 import { simpleForm } from "./simpleFormDemo";
-import { testTableCounter } from "./stateDemo";
-import { stateFetchDemo } from "./stateFetchDemo";
 import { onDestroyParentDemo, onDestroyTwoNodes } from "./stateOnDestroyDemo";
-import {stateTimeoutDemo} from "./stateTimeoutDemo";
+import { stateTimeoutDemo } from "./stateTimeoutDemo";
 
 interface Demo {
   title: string;
@@ -17,14 +17,14 @@ interface Demo {
 const demo = (title: string, fn: () => HTMLElement) => ({ title, fn });
 
 const demos: Demo[] = [
-  demo("counter(), naive 2010 DOM node version", basicCounter),
   demo("testable counter", testTableCounter),
+  demo("fetch examples", fetchDemo),
+  demo("form handling with createFormState", createFormStateDemo),
+  demo("counter(), naive 2010 DOM node version", basicCounter),
   demo("onDestroyDemo", onDestroyTwoNodes),
   demo("onDestroyParentDemo", onDestroyParentDemo),
   demo("channelsDemo", channelsDemo),
   demo("simple form - form handling with state", simpleForm),
-  demo("form handling with createFormState", createFormStateDemo),
-  demo("fetch examples", stateFetchDemo),
   demo("timeout example", stateTimeoutDemo),
 ];
 

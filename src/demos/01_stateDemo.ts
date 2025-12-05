@@ -14,7 +14,6 @@ export function testTableCounter() {
     // connect subscribers
     state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
     state.onValueChange((obj) => {
-      console.log(state.describe());
       nodes.info.nodeValue = `Counter: ${obj.total}`;
     });
     // render content with state.refresh()
