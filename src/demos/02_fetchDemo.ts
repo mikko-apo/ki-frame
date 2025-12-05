@@ -7,7 +7,7 @@ export function fetchDemo() {
   const b = button("Click me to fetch!");
   let counter = 0;
 
-  const setText = (text: string) => (info.nodeValue = text);
+  const setText = (s: string) => (info.nodeValue = s);
   const handleError = (reason: unknown) =>
     setText(
       isErrorResponse(reason)
