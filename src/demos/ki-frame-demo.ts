@@ -5,7 +5,7 @@ import { createFormStateDemo } from "./formDemo";
 import { basicCounter } from "./simpleDemos";
 import { simpleForm } from "./simpleFormDemo";
 import { testTableCounter } from "./stateDemo";
-import { stateFetchDemo } from "./stateFetchDemo";
+import { fetchDemo } from "./fetchDemo";
 import { onDestroyParentDemo, onDestroyTwoNodes } from "./stateOnDestroyDemo";
 import {stateTimeoutDemo} from "./stateTimeoutDemo";
 
@@ -24,7 +24,7 @@ const demos: Demo[] = [
   demo("channelsDemo", channelsDemo),
   demo("simple form - form handling with state", simpleForm),
   demo("form handling with createFormState", createFormStateDemo),
-  demo("fetch examples", stateFetchDemo),
+  demo("fetch examples", fetchDemo),
   demo("timeout example", stateTimeoutDemo),
 ];
 

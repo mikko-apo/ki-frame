@@ -692,7 +692,7 @@
     return counter().root;
   }
 
-  // src/demos/stateFetchDemo.ts
+  // src/demos/fetchDemo.ts
   function stateFetchDemo() {
     const info = text();
     const b2 = button("Click me to fetch!");

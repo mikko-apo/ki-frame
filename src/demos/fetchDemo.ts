@@ -1,7 +1,7 @@
 import {button, div, text} from "../domBuilder";
 import {createState} from "../state";
 
-export function stateFetchDemo() {
+export function fetchDemo() {
   const info = text();
   const b = button("Click me to fetch!");
 
