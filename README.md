@@ -306,7 +306,7 @@ function counter(state = createState({total: 0})) {
 }
 ```
 
-Check out the live demos at http://localhost:8000/docs/#createFormState
+Check out the live demos at https://mikko-apo.github.io/ki-frame/#createFormState
 
 ## Use state.fetch(url)
 
@@ -347,11 +347,11 @@ export function fetchDemo() {
 }
 ```
 
-Check out the live demos at http://localhost:8000/docs/#fetch
+Check out the live demos at https://mikko-apo.github.io/ki-frame/#fetch
 
 ## Use createFormState()
 
-Check out the live demos at http://localhost:8000/docs/#createFormState
+Check out the live demos at https://mikko-apo.github.io/ki-frame/#createFormState
 
 ## How to test?
 
