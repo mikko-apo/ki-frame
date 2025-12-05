@@ -40,8 +40,8 @@ like it's 2010 again, but with better tooling.
             * registration + state.destroy()
             * see [Use createState()](#use-createstate)
             * works by keeping list of externally created references which state can automatically remove:
-              * dom listeners: state.addDomEvent()
-              * external processes: state.fetch(), state.timeout()
+                * dom listeners: state.addDomEvent()
+                * external processes: state.fetch(), state.timeout()
 * [form.ts](src/form.ts)
     * domEvent() and createFormState(inputsAsStateTree) make it easy to create both simple and complex forms
     * note: the first version of the API is unstable and will ~~change~~ improve
@@ -83,6 +83,7 @@ like it's 2010 again, but with better tooling.
                 * error logging
                 * return error
         * tooling
+    * convert to class
 * context
     * context contains
         * default configurations for created objects
@@ -116,10 +117,14 @@ like it's 2010 again, but with better tooling.
         * state/group state available to field level
         * field validation issues available to root level
         * mapping errors as validation issues
-* fetch
-    * retry strategy: retries, delay
-* timeout
-  * execute fn and remove timeout before it triggers
+* external event sources
+    * fetch
+        * retry strategy: retries, delay
+        * does ki-frame need these both to work:
+            * state.fetch(url).then(mapper)
+            * state.fetch(url, {map: mapper})
+    * timeout
+        * execute fn and remove timeout before it triggers
 * XHR integration
     * abort
 * router
@@ -303,6 +308,45 @@ function counter(state = createState({total: 0})) {
 ```
 
 # Use createFormState()
+
+# Use state.fetch(url)
+
+state.fetch(url)
+
+* by default assertOk option is true: return code needs to be 200-299. Promise handling raises an error is return code
+  is something else
+* it's good to define both ok and error handler with .then() `state.fetch(url).then(okCase, errorCase)`
+* is attached to state for state.destroy() and is detached after fetch promise completes
+* returns an object with {destroy: () => void} function that aborts the fetch
+* supports timeout
+
+**note**: example doesn't use state to store value. regular `let`is fine until you need to pass it to other components or
+return it for parent.
+
+```typescript
+export function fetchDemo() {
+  const info = text("Not loaded");
+  const b = button("Click me to fetch!");
+  let counter = 0;
+
+  const setText = (text: string) => (info.nodeValue = text);
+  const handleError = (reason: unknown) =>
+    setText(
+      isErrorResponse(reason)
+        ? `There was an error, response.status is ${reason.errorResponse.status}`
+        : `There was an error, response.status is ${reason}`,
+    );
+
+  const state = createController();
+  state.addDomEvent("start fetch", b, "click", () => {
+    counter++;
+    setText("Loading...");
+    state.fetch("test.json", {timeoutMs: 1000}).then(() => setText(`Loaded ok.`), handleError);
+  });
+
+  return div(b, info);
+}
+```
 
 ## How to test?
 
