@@ -5,23 +5,25 @@ It provides an API layer that works with native browser APIs, offering structure
 fully accessible. It simplifies common patterns while maintaining direct interaction with native features.
 
 <!-- TOC -->
+
 * [Sponsors](#sponsors)
 * [Overview](#overview)
-  * [domBuilder](#dombuilder)
-  * [State](#state)
-  * [Form](#form)
-  * [Testing](#testing)
+    * [domBuilder](#dombuilder)
+    * [State](#state)
+    * [Form](#form)
+    * [Testing](#testing)
 * [Roadmap](#roadmap)
 * [How are you supposed to use this?](#how-are-you-supposed-to-use-this)
-  * [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
-  * [Use createState()](#use-createstate)
-  * [How to structure code?](#how-to-structure-code)
-    * [Example: counter](#example-counter)
-  * [Use state.fetch(url)](#use-statefetchurl)
-  * [Use createFormState()](#use-createformstate)
-  * [How to test?](#how-to-test)
+    * [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
+    * [Use createState()](#use-createstate)
+    * [How to structure code?](#how-to-structure-code)
+        * [Example: counter](#example-counter)
+    * [Use state.fetch(url)](#use-statefetchurl)
+    * [Use createFormState()](#use-createformstate)
+    * [How to test?](#how-to-test)
 * [What next?](#what-next)
 * [Legend for icons](#legend-for-icons)
+
 <!-- TOC -->
 
 # Sponsors
@@ -39,8 +41,8 @@ see [domBuilder.ts](src/domBuilder.ts) and [Use fluent syntax for DOM trees](#us
 
 ## State
 
-**State** is the central mechanism of ki-frame. It unifies application logic, UI nodes, and resource management into a
-coherent model.
+**State** is the central mechanism of ki-frame. It unifies application logic and resource, state and event management into
+a coherent model.
 
 **State connects all the browser side components and app logic together**:
 
