@@ -1,7 +1,7 @@
 import { p, text } from "../domBuilder";
 import { createState } from "../state";
 
-export function domBuilerWithState() {
+export function domBuilderWithState() {
   // DOM structure setup for testing
   const createNodes = () => {
     const info = text();

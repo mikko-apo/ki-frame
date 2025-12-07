@@ -4,6 +4,8 @@ ki-frame is a lightweight, all-in-one framework for building browser application
 It provides an API layer that works with native browser APIs, offering structure where needed while keeping the platform
 fully accessible. It simplifies common patterns while maintaining direct interaction with native features.
 
+**note**: ki-frame is in active development and very unstable, so don't use it yet.
+
 <!-- TOC -->
 
 * [Sponsors](#sponsors)
@@ -37,12 +39,15 @@ A concise, expressive utility for constructing and managing DOM trees:
 - Simple syntax for creating DOM nodes and hierarchies
 - Optional extended API for common attributes and patterns
 
-see [domBuilder.ts](src/domBuilder.ts) and [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
+More information:
+
+- documentation: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
+- code: [domBuilder.ts](src/domBuilder.ts)
 
 ## State
 
-**State** is the central mechanism of ki-frame. It unifies application logic and resource, state and event management into
-a coherent model.
+**State** is the central mechanism of ki-frame. It unifies application logic and resource, state and event management
+into a coherent model.
 
 **State connects all the browser side components and app logic together**:
 
@@ -71,7 +76,15 @@ a coherent model.
     - Automatically triggers `state.destroy()` when a linked DOM node is removed from DOM tree
 - WeakRef-based fine-grained resource and link management
 
-see [state.ts](src/state.ts) and [Use createState()](#use-createstate)
+More information:
+
+- source code: [state.ts](src/state.ts)
+- createState
+    - documentation: [Use createState()](#use-createstate)
+    - demo: https://mikko-apo.github.io/ki-frame/#domBuilderWithState
+- state.fetch()
+    - documentation: [Use state.fetch(url)](#use-statefetchurl)
+    - demo: https://mikko-apo.github.io/ki-frame/#fetch
 
 ## Form
 
@@ -80,6 +93,12 @@ A structured approach to form handling built on top of state:
 - Per-input validation and type handling
 - Collects input values into a typed state object
 - Full-form validation supported by the same state infrastructure
+
+More information::
+
+- documentation: [Use createFormState()](#use-createformstate)
+- source code: [form.ts](src/form.ts)
+- demo: https://mikko-apo.github.io/ki-frame/#createFormState
 
 ## Testing
 
@@ -94,125 +113,9 @@ ki-frame supports various levels of testing in addition to automated browser tes
     - components and even apps can be tested with jsdom.
     - DOM events can be triggered to simulate user actions in a browser
 
-# Roadmap
+More information:
 
-**Planned**
-
-* state
-    * logging of relevant things via context
-    * unified model for sharing data, event signalling
-        * to linked/child states
-        * events (updateUi, destroy, stateChanged):
-            * do/ignore
-            * passthrough / prevent
-        * linked state value:
-            * share full original data, lens of original data, own data
-            * state value from merged children
-    * unified model for cleanup
-        * owned resources: listeners, fetches, timeouts, ...
-        * destroy event sent by default to child states
-        * weakref/regular ref
-    * gc/cleanup
-        * weakRef 🛠️
-        * onRemoveDestroy(node) - MutationObserver 🛠️
-            * MutationObserver and WeakRef + FinalizationRegistry
-        * assertions
-            * allowedSources
-                * limits the sources the state can be attached to
-                * optional safety check that prevents errors
-            * allowedTargets
-            * state used after destroy()
-                * error logging
-                * return error
-        * tooling
-    * convert to class
-    * root node event listener & delegation directly to listener
-    * state.link() for attaching existing states together
-        * prevent state circles
-* context
-    * context contains
-        * default configurations for created objects
-        * document reference for domBuilder
-        * links to created states
-        * root id + main counter
-        * centralized logging
-    * provides connection point for improved developer tooling
-        * tooling for inspecting created states and the related state values
-            * whole app vs section vs component
-        * monitoring
-        * runtime configuration
-        * send reports to server
-* form
-    * **bugs**
-        * race condition when pressing enter on input field, submit handling is triggered before onkeyup
-    * render initial values
-        * initial state with partially set and non-set values with no visible errors
-    * dynamic array of items
-    * disable / exclude / remove field/group from state temporarily
-    * reset to initial value
-    * undo / redo for state
-    * input id and name generation
-    * two-way mapping, from init value to input string, from input string to state
-    * simplify domEvent with domInput
-        * default event and mapper based on input type
-    * auto disable for fields when submit is being processed
-    * improved validation API
-        * prevent submit if validations are failing
-        * async validators
-        * read validation specification from dom node
-        * composable validations
-        * separate handling of validation success & failure, expose validation handling to root level
-            * return value more understandable
-        * state/group state available to field level
-        * field validation issues available to root level
-        * mapping errors as validation issues
-* external event sources
-    * fetch
-        * retry strategy: retries, delay
-        * does ki-frame need these both to work:
-            * state.fetch(url).then(mapper)
-            * state.fetch(url, {map: mapper})
-    * timeout
-        * execute fn and remove timeout before it triggers
-    * XHR integration
-        * abort
-* router
-    * tigher integration with browser urls
-    * initialize application based on route parameters
-    * control application url and actions based on user actions
-    * port of https://github.com/mikko-apo/ki-router.js
-
-**Bubbling under**
-
-* state
-    * propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
-        * state.refresh("all"|"linked"|"this")
-        * state.destroy("all"|"linked"|"this")
-        * maybe when linking parent and child state, the accepted events should be listed: {destroy: true, refresh:
-          true,
-          onchange: (state) => {...}}
-            * default should be: {destroy: true, refresh: true}
-        * maybe onChange should include onDestory subscription too
-        * Create a diagram to explain how to changes and destroys work together
-    * operations
-        * state.reducer()
-        * state.pick()
-        * state.merge()
-    * generic promise support
-        * should unattach from parentState once promise fulfills or rejects
-* domBuilder
-    * separate classic and extended api
-        * better ways to add class, style, event handlers etc
-            * Partial<HTMLElement> and Partial<Text> pollute builder function apis CreateElementArg, extended API can
-              provide have more straightforward DX
-    * Configure createElement partial attribute types with JSX.IntrinsicElements[T] to get props for HtmlElements
-* form
-    * group level validation: support for grouping inputs in to groups
-    * Standard Schema support
-* SSR
-    * Not yet
-    * domBuilder and states can be used to SSR
-    * the client side needs to be able to hydrate in place
+- documentation: [How to test?](#how-to-test)
 
 # How are you supposed to use this?
 
@@ -449,6 +352,155 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 </p>
 `;
 ```
+
+# Roadmap
+
+- 0.0.1 <- Development is at this stage
+- 0.1 First npm release
+- 1.0
+    - All planned items below:
+    - Stable APIs
+        - state, controller
+            - state linking: events and data
+            - event propagation
+            - resource management
+              - fetch, timeout
+              - promise
+        - context
+          - defaults
+          - states and app structure
+          - logging
+        - form
+- 2.0 SSR
+
+**Planned**
+
+* state
+    * logging of relevant things via context
+    * unified model for sharing data, event signalling
+        * to linked/child states
+        * events (updateUi, destroy, stateChanged):
+            * do/ignore
+            * passthrough / prevent
+        * linked state value:
+            * share full original data, lens of original data, own data
+            * state value from merged children
+    * unified model for cleanup
+        * owned resources: listeners, fetches, timeouts, ...
+        * destroy event sent by default to child states
+        * weakref/regular ref
+    * gc/cleanup
+        * weakRef 🛠️
+        * onRemoveDestroy(node) - MutationObserver 🛠️
+            * MutationObserver and WeakRef + FinalizationRegistry
+        * assertions
+            * allowedSources
+                * limits the sources the state can be attached to
+                * optional safety check that prevents errors
+            * allowedTargets
+            * state used after destroy()
+                * error logging
+                * return error
+        * tooling
+    * convert to class
+    * root node event listener & delegation directly to listener
+    * state.link() for attaching existing states together
+        * prevent state circles
+* context
+    * context contains
+        * default configurations for created objects
+        * document reference for domBuilder
+        * links to created states
+        * root id + main counter
+        * centralized logging
+    * provides connection point for improved developer tooling
+        * tooling for inspecting created states and the related state values
+            * whole app vs section vs component
+        * monitoring
+        * runtime configuration
+        * send reports to server
+* form
+    * **bugs**
+        * race condition when pressing enter on input field, submit handling is triggered before onkeyup
+    * render initial values
+        * initial state with partially set and non-set values with no visible errors
+    * dynamic array of items
+    * disable / exclude / remove field/group from state temporarily
+    * reset to initial value
+    * undo / redo for state
+    * input id and name generation
+    * two-way mapping, from init value to input string, from input string to state
+    * simplify domEvent with domInput
+        * default event and mapper based on input type
+    * auto disable for fields when submit is being processed
+    * improved validation API
+        * prevent submit if validations are failing
+        * async validators
+        * read validation specification from dom node
+        * composable validations
+        * separate handling of validation success & failure, expose validation handling to root level
+            * return value more understandable
+        * state/group state available to field level
+        * field validation issues available to root level
+        * mapping errors as validation issues
+* external event sources
+    * fetch
+        * retry strategy: retries, delay
+        * does ki-frame need these both to work:
+            * state.fetch(url).then(mapper)
+            * state.fetch(url, {map: mapper})
+    * timeout
+        * execute fn and remove timeout before it triggers
+    * XHR integration
+        * abort
+* router
+    * tigher integration with browser urls
+    * initialize application based on route parameters
+    * control application url and actions based on user actions
+    * port of https://github.com/mikko-apo/ki-router.js
+* Standard Schema support
+  * form validation
+  * state validation
+* classes and styles
+
+**Bubbling under**
+
+* state
+    * propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
+        * state.refresh("all"|"linked"|"this")
+        * state.destroy("all"|"linked"|"this")
+        * maybe when linking parent and child state, the accepted events should be listed: {destroy: true, refresh:
+          true,
+          onchange: (state) => {...}}
+            * default should be: {destroy: true, refresh: true}
+        * maybe onChange should include onDestory subscription too
+        * Create a diagram to explain how to changes and destroys work together
+    * state operations
+        * state.reducer()
+        * state.pick()
+        * state.merge()
+    * generic promise support
+        * should unattach from parentState once promise fulfills or rejects
+* domBuilder
+    * separate classic and extended api
+        * better ways to add class, style, event handlers etc
+            * Partial<HTMLElement> and Partial<Text> pollute builder function apis CreateElementArg, extended API can
+              provide have more straightforward DX
+    * Configure createElement partial attribute types with JSX.IntrinsicElements[T] to get props for HtmlElements
+* form
+    * group level validation: support for grouping inputs in to groups
+    * Standard Schema support
+* Advanced stuff
+  * requestAnimationFrame - queue DOM reads and writes
+  * Virtualize long lists - Provide or recommend a tiny virtualization helper for lists (windowing) to render only visible items.
+  * IntersectionObserver - Lazy-load images/components when entering viewport.
+  * Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate progressively or lazy-load components.
+  * Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
+  * 
+  * SSR
+      * Not yet
+      * domBuilder and state resource registration and jsdom can be used to collect data for SSR
+      * the client side needs to be able to hydrate in place
 
 # What next?
 
