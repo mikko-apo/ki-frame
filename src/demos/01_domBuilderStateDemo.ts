@@ -1,5 +1,5 @@
+import { createState } from "..";
 import { p, text } from "../domBuilder";
-import { createState } from "../state";
 
 export function domBuilderWithState() {
   // DOM structure setup for testing

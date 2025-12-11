@@ -1,6 +1,6 @@
+import { createForm } from "..";
 import { form, input, pre } from "../domBuilder";
 import { formEvent } from "../form";
-import { createForm } from "../state";
 
 export function createFormStateDemo(init = { a: 23, b: 10 }) {
   // define dom elements
@@ -31,9 +31,10 @@ export function createFormStateDemo(init = { a: 23, b: 10 }) {
       validate: ({ a, b }) => {
         const isOk = a + b === 15;
         if (isOk) {
+          log(`Form full state validation: ${a} + ${b}=${a + b} is 15!`);
           return true;
         }
-        log(`Form full state validation : ${a}0${b}=${a + b} is not 15`);
+        log(`Form full state validation : ${a} + ${b}=${a + b} is not 15`);
         return false;
       },
     },

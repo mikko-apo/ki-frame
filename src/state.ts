@@ -1,6 +1,6 @@
 import { Channel, type Unsub, type UnwrapMaybeTuple } from "./channel";
 import type { ErrorResponse, FetchOptions } from "./fetch";
-import { FormState, type StateFromInputTree } from "./form";
+import { collectFormsInputs, type PathTuple, readRaw, type StateFromInputTree } from "./form";
 import {
   type CallbackInfo,
   type Destroyable,
@@ -9,7 +9,7 @@ import {
   TimeoutDestroyable,
 } from "./promiseDestroy";
 import type { DestroyCb, EventSource } from "./types";
-import { createId, isDefined } from "./util";
+import { copyAndSet, createId, isDefined } from "./util";
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b;
@@ -337,13 +337,13 @@ export class State<Value> extends Controller {
     this.getOnChange().publish(newObj, old);
   }
 
-  modify(fn: (cur: Readonly<Value>) => Value) {
+  modify(fn: (cur: Value) => Value) {
     if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot modify"));
     const next = fn(this.value);
     this.set(next);
   }
 
-  onValueChange(cb: (obj: Readonly<Value>, old: Readonly<Value>) => void): Unsub {
+  onValueChange(cb: (obj: Value, old: Value) => void): Unsub {
     if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
     return this.getOnChange().subscribe(cb);
   }
@@ -354,8 +354,57 @@ export class State<Value> extends Controller {
   }
 }
 
-const defaultContext = new Context();
+export class FormState<T extends Record<string, any>> extends State<StateFromInputTree<T>> {
+  constructor(
+    parent: Context,
+    t: T,
+    init: StateFromInputTree<T>,
+    options?: { validate?: (value: StateFromInputTree<T>) => boolean } & StateOptions,
+  ) {
+    const { validate, ...stateOptions } = options || {};
+    super(parent, init, stateOptions);
+    const inputs = collectFormsInputs(t);
+    if (validate) {
+      const validInputValues = this.createState(init, { name: "valid input values" });
+      validInputValues.onValueChange((newState) => {
+        if (!validate(newState)) {
+          return;
+        }
+        this.set(newState);
+      });
+      this.attachListeners(validInputValues, inputs);
+    } else {
+      this.attachListeners(this, inputs);
+    }
+  }
 
-export const createController = defaultContext.createController.bind(defaultContext);
-export const createState = defaultContext.createState.bind(defaultContext);
-export const createForm = defaultContext.createForm.bind(defaultContext);
+  private attachListeners(inputState: State<StateFromInputTree<T>>, inputs: PathTuple[]) {
+    for (const [path, input] of inputs) {
+      inputState.addDomEvent(path, input.node, input.key, (ev: Event) => {
+        const value = input.map ? input.map(readRaw(input.node)) : readRaw(input.node);
+        if (input.validate && !input.validate(value, input.node, ev)) {
+          return;
+        }
+        const newState = copyAndSet(inputState.get(), path, value);
+        inputState.set(newState);
+      });
+    }
+  }
+
+  onsubmit(
+    root: Node,
+    listener: (ev: HTMLElementEventMap["submit"]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): Unsub {
+    return this.addDomEvent(
+      "submit",
+      root,
+      "submit",
+      (ev) => {
+        ev.preventDefault();
+        listener(ev);
+      },
+      options,
+    );
+  }
+}
