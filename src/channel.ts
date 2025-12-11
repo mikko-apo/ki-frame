@@ -1,8 +1,10 @@
 // utils
-import type { Destroyable } from "./types";
+
+import type { Destroyable } from "./promiseDestroy";
 import { createId } from "./util";
 
 type MaybeTuple<T> = T extends any[] ? T : T extends void ? [] : [T];
+export type UnwrapMaybeTuple<M> = M extends readonly (infer U)[] ? U : M;
 type SubscriberFor<P extends any[]> = (...args: P) => void | Promise<void>;
 export type Unsub = () => void;
 

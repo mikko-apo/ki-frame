@@ -1,5 +1,17 @@
-import type { Destroyable } from "./types";
+import type { Unsub } from "./channel";
 
+export interface Destroyable {
+  destroy(): void;
+}
+
+export interface FetchInfo extends Destroyable {
+  type: "fetch";
+  url: string;
+}
+
+export interface CallbackInfo extends Destroyable {
+  type: "function";
+}
 /**
  * Util class for returning a promise and destroy() function
  */
@@ -53,5 +65,30 @@ export class PromiseDestroy<T> implements Promise<T>, Destroyable {
    */
   toString(): string {
     return Object.prototype.toString.call(this);
+  }
+}
+
+export class TimeoutDestroyable implements Destroyable {
+  readonly at = Date.now() + (this.timeout ?? 0);
+  private readonly id = setTimeout(this.fn, this.timeout);
+
+  constructor(
+    public readonly fn: Unsub,
+    public readonly timeout?: number,
+  ) {}
+
+  destroy(): void {
+    clearTimeout(this.id);
+  }
+}
+
+export class FetchDestroyable<T> extends PromiseDestroy<T> {
+  constructor(
+    public readonly url: string,
+    public readonly timeoutMs: number | undefined,
+    public readonly promise: Promise<T>,
+    public readonly destroy: Unsub,
+  ) {
+    super(promise, destroy);
   }
 }

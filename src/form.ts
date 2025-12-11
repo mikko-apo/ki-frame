@@ -1,5 +1,5 @@
-import { createState, type StateOptions } from "./state";
-import type { FormState } from "./types";
+import type { Unsub } from "./channel";
+import { type Context, State, type StateOptions } from "./state";
 import { copyAndSet } from "./util";
 
 class FormsInput<N extends Node, K extends keyof HTMLElementEventMap, V = string> {
@@ -23,7 +23,7 @@ type MapReturn<T> =
         string;
 
 // ---------- Recursive mapping: InputTree -> State shape ----------
-type StateFromInputTree<T> =
+export type StateFromInputTree<T> =
   // leaf node
   T extends FormsInput<any, any, any>
     ? MapReturn<T>
@@ -39,10 +39,6 @@ export function formEvent<N extends Node, K extends keyof HTMLElementEventMap, V
   return new FormsInput(node, key, map, validate);
 }
 
-function isFormsInput(x: any): x is FormsInput<Node, keyof HTMLElementEventMap, any> {
-  return x instanceof FormsInput;
-}
-
 type PathTuple = [path: string, input: FormsInput<any, any, any>];
 
 function collectFormsInputs(root: unknown): PathTuple[] {
@@ -51,7 +47,7 @@ function collectFormsInputs(root: unknown): PathTuple[] {
   function visit(node: any, pathParts: (string | number)[]) {
     if (node == null) return;
 
-    if (isFormsInput(node)) {
+    if (node instanceof FormsInput) {
       // join path parts into dotted path; numbers become indices
       const path = pathParts.map((p) => String(p)).join(".");
       out.push([path, node]);
@@ -95,31 +91,44 @@ function readRaw(node: Node): string {
   return String((node as Element).textContent ?? "");
 }
 
-export function createFormState<T extends Record<string, any>>(
-  t: T,
-  options?: { init: StateFromInputTree<T>; validate?: (value: StateFromInputTree<T>) => boolean } & StateOptions,
-): FormState<StateFromInputTree<T>> {
-  const { init, validate } = options || {};
-  const state = createState<StateFromInputTree<T>>(init, t);
-  const inputs = collectFormsInputs(t);
-  for (const [path, input] of inputs) {
-    state.addDomEvent(path, input.node, input.key, (ev: Event) => {
-      const value = input.map ? input.map(readRaw(input.node)) : readRaw(input.node);
-      console.log(`dom event ${path} ${input.key} value ${value}`);
-      if (input.validate && !input.validate(value, input.node, ev)) {
-        console.log(`Validating ${input.key} value ${value}: false`);
-        return;
-      }
-      const newState = copyAndSet(state.get(), path, value);
-      if (validate && !validate(newState)) {
-        console.log(`Validating state: false`, newState);
-        return;
-      }
-      state.set(newState);
-    });
+export class FormState<T extends Record<string, any>> extends State<StateFromInputTree<T>> {
+  constructor(
+    parent: Context,
+    t: T,
+    init: StateFromInputTree<T>,
+    options?: { validate?: (value: StateFromInputTree<T>) => boolean } & StateOptions,
+  ) {
+    const { validate, ...stateOptions } = options || {};
+    super(parent, init, stateOptions);
+    const inputs = collectFormsInputs(t);
+    this.attachListeners(inputs, validate);
   }
-  const onsubmit: FormState<StateFromInputTree<T>>["onSubmit"] = (root, listener, options) => {
-    return state.addDomEvent(
+
+  private attachListeners(inputs: PathTuple[], validate?: (value: StateFromInputTree<T>) => boolean) {
+    for (const [path, input] of inputs) {
+      this.addDomEvent(path, input.node, input.key, (ev: Event) => {
+        const value = input.map ? input.map(readRaw(input.node)) : readRaw(input.node);
+        console.log(`dom event ${path} ${input.key} value ${value}`);
+        if (input.validate && !input.validate(value, input.node, ev)) {
+          console.log(`Validating ${input.key} value ${value}: false`);
+          return;
+        }
+        const newState = copyAndSet(this.get(), path, value);
+        if (validate && !validate(newState)) {
+          console.log(`Validating state: false`, newState);
+          return;
+        }
+        this.set(newState);
+      });
+    }
+  }
+
+  onsubmit(
+    root: Node,
+    listener: (ev: HTMLElementEventMap["submit"]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): Unsub {
+    return this.addDomEvent(
       "submit",
       root,
       "submit",
@@ -129,6 +138,5 @@ export function createFormState<T extends Record<string, any>>(
       },
       options,
     );
-  };
-  return { ...state, onSubmit: onsubmit };
+  }
 }

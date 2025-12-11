@@ -18,7 +18,7 @@ export function channelsDemo() {
   });
 
   // renders content with with state.onChange()
-  state.refresh();
+  state.updateUi();
   const t1 = text("T1");
   const root = p(
     p("Click me to send message!", {

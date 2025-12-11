@@ -17,7 +17,7 @@ export function domBuilderWithState() {
       nodes.info.nodeValue = `Counter: ${obj.total}`;
     });
     // render content with state.refresh()
-    state.refresh();
+    state.updateUi();
     return nodes;
   }
 
