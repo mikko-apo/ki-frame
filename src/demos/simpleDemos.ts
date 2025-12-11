@@ -1,5 +1,6 @@
+import type { State } from "..";
 import { p, text } from "../domBuilder";
-import { createState, type State } from "../state";
+import { createState } from "../index";
 
 interface Total {
   total: number;

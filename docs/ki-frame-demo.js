@@ -1,177 +1,5 @@
 "use strict";
 (() => {
-  // src/types.ts
-  var WrappedNode = class {
-    constructor(node) {
-      this._node = node;
-    }
-    get node() {
-      return this._node;
-    }
-  };
-
-  // src/domBuilder.ts
-  function addItems(element, ...args) {
-    args.forEach((arg) => {
-      if (Array.isArray(arg)) {
-        addItems(element, ...arg);
-      } else if (isNode(arg)) {
-        element.appendChild(arg);
-      } else if (arg instanceof WrappedNode) {
-        element.appendChild(arg.node);
-      } else if (typeof arg === "string") {
-        element.appendChild(getDocument().createTextNode(arg));
-      } else if (typeof arg === "object") {
-        Object.keys(arg).forEach((key) => {
-          const argValue = arg[key];
-          if (key.startsWith("on") && typeof argValue === "function") {
-            const event = key.substring(2).toLowerCase();
-            element.addEventListener(event, argValue);
-          } else {
-            element.setAttribute(key, argValue);
-          }
-        });
-      }
-    });
-  }
-  var doc = typeof document !== "undefined" ? document : void 0;
-  var isNode = (e) => {
-    return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
-  };
-  function getDocument() {
-    if (doc) {
-      return doc;
-    }
-    throw new Error("document is undefined");
-  }
-  function createElement(tagNameOrElement, ...args) {
-    const element = getDocument().createElement(tagNameOrElement);
-    addItems(element, ...args);
-    return element;
-  }
-  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
-  var a = createElementFn("a");
-  var abbr = createElementFn("abbr");
-  var address = createElementFn("address");
-  var area = createElementFn("area");
-  var article = createElementFn("article");
-  var aside = createElementFn("aside");
-  var audio = createElementFn("audio");
-  var b = createElementFn("b");
-  var base = createElementFn("base");
-  var bdi = createElementFn("bdi");
-  var bdo = createElementFn("bdo");
-  var blockquote = createElementFn("blockquote");
-  var body = createElementFn("body");
-  var br = createElementFn("br");
-  var button = createElementFn("button");
-  var canvas = createElementFn("canvas");
-  var caption = createElementFn("caption");
-  var cite = createElementFn("cite");
-  var code = createElementFn("code");
-  var col = createElementFn("col");
-  var colgroup = createElementFn("colgroup");
-  var data = createElementFn("data");
-  var datalist = createElementFn("datalist");
-  var dd = createElementFn("dd");
-  var del = createElementFn("del");
-  var details = createElementFn("details");
-  var dfn = createElementFn("dfn");
-  var dialog = createElementFn("dialog");
-  var div = createElementFn("div");
-  var dl = createElementFn("dl");
-  var dt = createElementFn("dt");
-  var em = createElementFn("em");
-  var embed = createElementFn("embed");
-  var fieldset = createElementFn("fieldset");
-  var figcaption = createElementFn("figcaption");
-  var figure = createElementFn("figure");
-  var footer = createElementFn("footer");
-  var form = createElementFn("form");
-  var h1 = createElementFn("h1");
-  var h2 = createElementFn("h2");
-  var h3 = createElementFn("h3");
-  var h4 = createElementFn("h4");
-  var h5 = createElementFn("h5");
-  var h6 = createElementFn("h6");
-  var head = createElementFn("head");
-  var header = createElementFn("header");
-  var hgroup = createElementFn("hgroup");
-  var hr = createElementFn("hr");
-  var html = createElementFn("html");
-  var i = createElementFn("i");
-  var iframe = createElementFn("iframe");
-  var img = createElementFn("img");
-  var input = createElementFn("input");
-  var ins = createElementFn("ins");
-  var kbd = createElementFn("kbd");
-  var label = createElementFn("label");
-  var legend = createElementFn("legend");
-  var li = createElementFn("li");
-  var link = createElementFn("link");
-  var main = createElementFn("main");
-  var map = createElementFn("map");
-  var mark = createElementFn("mark");
-  var menu = createElementFn("menu");
-  var meta = createElementFn("meta");
-  var meter = createElementFn("meter");
-  var nav = createElementFn("nav");
-  var noscript = createElementFn("noscript");
-  var object = createElementFn("object");
-  var ol = createElementFn("ol");
-  var optgroup = createElementFn("optgroup");
-  var option = createElementFn("option");
-  var output = createElementFn("output");
-  var p = createElementFn("p");
-  var picture = createElementFn("picture");
-  var pre = createElementFn("pre");
-  var progress = createElementFn("progress");
-  var q = createElementFn("q");
-  var rp = createElementFn("rp");
-  var rt = createElementFn("rt");
-  var ruby = createElementFn("ruby");
-  var s = createElementFn("s");
-  var samp = createElementFn("samp");
-  var script = createElementFn("script");
-  var search = createElementFn("search");
-  var section = createElementFn("section");
-  var select = createElementFn("select");
-  var slot = createElementFn("slot");
-  var small = createElementFn("small");
-  var source = createElementFn("source");
-  var span = createElementFn("span");
-  var strong = createElementFn("strong");
-  var style = createElementFn("style");
-  var sub = createElementFn("sub");
-  var summary = createElementFn("summary");
-  var sup = createElementFn("sup");
-  var table = createElementFn("table");
-  var tbody = createElementFn("tbody");
-  var td = createElementFn("td");
-  var template = createElementFn("template");
-  var textarea = createElementFn("textarea");
-  var tfoot = createElementFn("tfoot");
-  var th = createElementFn("th");
-  var thead = createElementFn("thead");
-  var time = createElementFn("time");
-  var title = createElementFn("title");
-  var tr = createElementFn("tr");
-  var track = createElementFn("track");
-  var u = createElementFn("u");
-  var ul = createElementFn("ul");
-  var varE = createElementFn("var");
-  var video = createElementFn("video");
-  var wbr = createElementFn("wbr");
-  var text = (arg = "") => getDocument().createTextNode(String(arg));
-  function setElementToId(targetId, element) {
-    const targetElement = getDocument().getElementById(targetId);
-    if (targetElement) {
-      targetElement.replaceChildren(element);
-    } else {
-      console.error(`Target element with ID "${targetId}" not found!`);
-    }
-  }
-
   // src/util.ts
   var runningId = 0;
   function createId(id) {
@@ -328,44 +156,6 @@
     if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
     return String((_a2 = node.textContent) != null ? _a2 : "");
   }
-  var FormState = class extends State {
-    constructor(parent, t, init, options) {
-      const { validate, ...stateOptions } = options || {};
-      super(parent, init, stateOptions);
-      const inputs = collectFormsInputs(t);
-      this.attachListeners(inputs, validate);
-    }
-    attachListeners(inputs, validate) {
-      for (const [path, input2] of inputs) {
-        this.addDomEvent(path, input2.node, input2.key, (ev) => {
-          const value = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
-          console.log(`dom event ${path} ${input2.key} value ${value}`);
-          if (input2.validate && !input2.validate(value, input2.node, ev)) {
-            console.log(`Validating ${input2.key} value ${value}: false`);
-            return;
-          }
-          const newState = copyAndSet(this.get(), path, value);
-          if (validate && !validate(newState)) {
-            console.log(`Validating state: false`, newState);
-            return;
-          }
-          this.set(newState);
-        });
-      }
-    }
-    onsubmit(root, listener, options) {
-      return this.addDomEvent(
-        "submit",
-        root,
-        "submit",
-        (ev) => {
-          ev.preventDefault();
-          listener(ev);
-        },
-        options
-      );
-    }
-  };
 
   // src/promiseDestroy.ts
   var PromiseDestroy = class _PromiseDestroy {
@@ -682,10 +472,227 @@
       (_a2 = this.onChange) == null ? void 0 : _a2.destroy();
     }
   };
+  var FormState = class extends State {
+    constructor(parent, t, init, options) {
+      const { validate, ...stateOptions } = options || {};
+      super(parent, init, stateOptions);
+      const inputs = collectFormsInputs(t);
+      if (validate) {
+        const validInputValues = this.createState(init, { name: "valid input values" });
+        validInputValues.onValueChange((newState) => {
+          if (!validate(newState)) {
+            return;
+          }
+          this.set(newState);
+        });
+        this.attachListeners(validInputValues, inputs);
+      } else {
+        this.attachListeners(this, inputs);
+      }
+    }
+    attachListeners(inputState, inputs) {
+      for (const [path, input2] of inputs) {
+        inputState.addDomEvent(path, input2.node, input2.key, (ev) => {
+          const value = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
+          if (input2.validate && !input2.validate(value, input2.node, ev)) {
+            return;
+          }
+          const newState = copyAndSet(inputState.get(), path, value);
+          inputState.set(newState);
+        });
+      }
+    }
+    onsubmit(root, listener, options) {
+      return this.addDomEvent(
+        "submit",
+        root,
+        "submit",
+        (ev) => {
+          ev.preventDefault();
+          listener(ev);
+        },
+        options
+      );
+    }
+  };
+
+  // src/index.ts
   var defaultContext = new Context();
   var createController = defaultContext.createController.bind(defaultContext);
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
+
+  // src/types.ts
+  var WrappedNode = class {
+    constructor(node) {
+      this._node = node;
+    }
+    get node() {
+      return this._node;
+    }
+  };
+
+  // src/domBuilder.ts
+  function addItems(element, ...args) {
+    args.forEach((arg) => {
+      if (Array.isArray(arg)) {
+        addItems(element, ...arg);
+      } else if (isNode(arg)) {
+        element.appendChild(arg);
+      } else if (arg instanceof WrappedNode) {
+        element.appendChild(arg.node);
+      } else if (typeof arg === "string") {
+        element.appendChild(getDocument().createTextNode(arg));
+      } else if (typeof arg === "object") {
+        Object.keys(arg).forEach((key) => {
+          const argValue = arg[key];
+          if (key.startsWith("on") && typeof argValue === "function") {
+            const event = key.substring(2).toLowerCase();
+            element.addEventListener(event, argValue);
+          } else {
+            element.setAttribute(key, argValue);
+          }
+        });
+      }
+    });
+  }
+  var doc = typeof document !== "undefined" ? document : void 0;
+  var isNode = (e) => {
+    return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
+  };
+  function getDocument() {
+    if (doc) {
+      return doc;
+    }
+    throw new Error("document is undefined");
+  }
+  function createElement(tagNameOrElement, ...args) {
+    const element = getDocument().createElement(tagNameOrElement);
+    addItems(element, ...args);
+    return element;
+  }
+  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
+  var a = createElementFn("a");
+  var abbr = createElementFn("abbr");
+  var address = createElementFn("address");
+  var area = createElementFn("area");
+  var article = createElementFn("article");
+  var aside = createElementFn("aside");
+  var audio = createElementFn("audio");
+  var b = createElementFn("b");
+  var base = createElementFn("base");
+  var bdi = createElementFn("bdi");
+  var bdo = createElementFn("bdo");
+  var blockquote = createElementFn("blockquote");
+  var body = createElementFn("body");
+  var br = createElementFn("br");
+  var button = createElementFn("button");
+  var canvas = createElementFn("canvas");
+  var caption = createElementFn("caption");
+  var cite = createElementFn("cite");
+  var code = createElementFn("code");
+  var col = createElementFn("col");
+  var colgroup = createElementFn("colgroup");
+  var data = createElementFn("data");
+  var datalist = createElementFn("datalist");
+  var dd = createElementFn("dd");
+  var del = createElementFn("del");
+  var details = createElementFn("details");
+  var dfn = createElementFn("dfn");
+  var dialog = createElementFn("dialog");
+  var div = createElementFn("div");
+  var dl = createElementFn("dl");
+  var dt = createElementFn("dt");
+  var em = createElementFn("em");
+  var embed = createElementFn("embed");
+  var fieldset = createElementFn("fieldset");
+  var figcaption = createElementFn("figcaption");
+  var figure = createElementFn("figure");
+  var footer = createElementFn("footer");
+  var form = createElementFn("form");
+  var h1 = createElementFn("h1");
+  var h2 = createElementFn("h2");
+  var h3 = createElementFn("h3");
+  var h4 = createElementFn("h4");
+  var h5 = createElementFn("h5");
+  var h6 = createElementFn("h6");
+  var head = createElementFn("head");
+  var header = createElementFn("header");
+  var hgroup = createElementFn("hgroup");
+  var hr = createElementFn("hr");
+  var html = createElementFn("html");
+  var i = createElementFn("i");
+  var iframe = createElementFn("iframe");
+  var img = createElementFn("img");
+  var input = createElementFn("input");
+  var ins = createElementFn("ins");
+  var kbd = createElementFn("kbd");
+  var label = createElementFn("label");
+  var legend = createElementFn("legend");
+  var li = createElementFn("li");
+  var link = createElementFn("link");
+  var main = createElementFn("main");
+  var map = createElementFn("map");
+  var mark = createElementFn("mark");
+  var menu = createElementFn("menu");
+  var meta = createElementFn("meta");
+  var meter = createElementFn("meter");
+  var nav = createElementFn("nav");
+  var noscript = createElementFn("noscript");
+  var object = createElementFn("object");
+  var ol = createElementFn("ol");
+  var optgroup = createElementFn("optgroup");
+  var option = createElementFn("option");
+  var output = createElementFn("output");
+  var p = createElementFn("p");
+  var picture = createElementFn("picture");
+  var pre = createElementFn("pre");
+  var progress = createElementFn("progress");
+  var q = createElementFn("q");
+  var rp = createElementFn("rp");
+  var rt = createElementFn("rt");
+  var ruby = createElementFn("ruby");
+  var s = createElementFn("s");
+  var samp = createElementFn("samp");
+  var script = createElementFn("script");
+  var search = createElementFn("search");
+  var section = createElementFn("section");
+  var select = createElementFn("select");
+  var slot = createElementFn("slot");
+  var small = createElementFn("small");
+  var source = createElementFn("source");
+  var span = createElementFn("span");
+  var strong = createElementFn("strong");
+  var style = createElementFn("style");
+  var sub = createElementFn("sub");
+  var summary = createElementFn("summary");
+  var sup = createElementFn("sup");
+  var table = createElementFn("table");
+  var tbody = createElementFn("tbody");
+  var td = createElementFn("td");
+  var template = createElementFn("template");
+  var textarea = createElementFn("textarea");
+  var tfoot = createElementFn("tfoot");
+  var th = createElementFn("th");
+  var thead = createElementFn("thead");
+  var time = createElementFn("time");
+  var title = createElementFn("title");
+  var tr = createElementFn("tr");
+  var track = createElementFn("track");
+  var u = createElementFn("u");
+  var ul = createElementFn("ul");
+  var varE = createElementFn("var");
+  var video = createElementFn("video");
+  var wbr = createElementFn("wbr");
+  var text = (arg = "") => getDocument().createTextNode(String(arg));
+  function setElementToId(targetId, element) {
+    const targetElement = getDocument().getElementById(targetId);
+    if (targetElement) {
+      targetElement.replaceChildren(element);
+    } else {
+      console.error(`Target element with ID "${targetId}" not found!`);
+    }
+  }
 
   // src/demos/01_domBuilderStateDemo.ts
   function domBuilderWithState() {
@@ -757,9 +764,10 @@
         validate: ({ a: a2, b: b2 }) => {
           const isOk = a2 + b2 === 15;
           if (isOk) {
+            log(`Form full state validation: ${a2} + ${b2}=${a2 + b2} is 15!`);
             return true;
           }
-          log(`Form full state validation : ${a2}0${b2}=${a2 + b2} is not 15`);
+          log(`Form full state validation : ${a2} + ${b2}=${a2 + b2} is not 15`);
           return false;
         }
       }

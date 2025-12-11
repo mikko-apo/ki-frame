@@ -1,6 +1,6 @@
+import { createController } from "..";
 import { button, div, text } from "../domBuilder";
 import { isErrorResponse } from "../fetch";
-import { createController } from "../state";
 
 export function fetchDemo() {
   const info = text("Not loaded");

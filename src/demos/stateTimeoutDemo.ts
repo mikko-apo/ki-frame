@@ -1,5 +1,5 @@
+import { createController } from "..";
 import { button, div, text } from "../domBuilder";
-import { createController } from "../state";
 
 export function stateTimeoutDemo() {
   const b1 = button("Click me!");

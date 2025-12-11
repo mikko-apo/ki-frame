@@ -1,6 +1,6 @@
+import { createState } from "..";
 import { ChannelRegistry } from "../channel";
 import { p, text } from "../domBuilder";
-import { createState } from "../state";
 
 export function channelsDemo() {
   const state = createState({ total: 0 });

@@ -1,5 +1,5 @@
+import { createController, createState, type State } from "..";
 import { form, input, pre } from "../domBuilder";
-import { createController, createState, type State } from "../state";
 
 export function simpleForm() {
   // generic helper function
