@@ -1,6 +1,5 @@
 import { form, input, pre } from "../domBuilder";
-import { createController, createState } from "../state";
-import type { State } from "../types";
+import { createController, createState, type State } from "../state";
 
 export function simpleForm() {
   // generic helper function
@@ -55,7 +54,7 @@ export function simpleForm() {
     });
 
     // renders content with with state.onChange()
-    formData.refresh();
+    formData.updateUi();
     return root;
   }
 

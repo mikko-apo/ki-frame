@@ -390,8 +390,8 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
         * destroy event sent by default to child states
         * weakref/regular ref
     * gc/cleanup
-        * weakRef 🛠️
-        * onRemoveDestroy(node) - MutationObserver 🛠️
+        * weakReff️
+        * onRemoveDestroy(node) - MutationObserver 
             * MutationObserver and WeakRef + FinalizationRegistry
         * assertions
             * allowedSources
@@ -406,7 +406,7 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     * root node event listener & delegation directly to listener
     * state.link() for attaching existing states together
         * prevent state circles
-* context
+* context 🛠️
     * context contains
         * default configurations for created objects
         * document reference for domBuilder
@@ -423,6 +423,7 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     * **bugs**
         * race condition when pressing enter on input field, submit handling is triggered before onkeyup
     * render initial values
+        * createForm is not able to work without init state
         * initial state with partially set and non-set values with no visible errors
     * dynamic array of items
     * disable / exclude / remove field/group from state temporarily

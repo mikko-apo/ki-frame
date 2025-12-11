@@ -1,6 +1,5 @@
 import { button, p, text } from "../domBuilder";
-import { createState } from "../state";
-import type { State } from "../types";
+import { createState, type State } from "../state";
 
 interface Total {
   total: number;
@@ -15,7 +14,7 @@ export function onDestroyTwoNodes() {
     return p(t);
   };
   const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
-  state.refresh();
+  state.updateUi();
   return root;
 }
 
@@ -29,9 +28,9 @@ export function onDestroyParentDemo() {
   parent.onDestroy(() => {
     parentInfo.nodeValue = "Parent was destroyed!";
   });
-  parent.addToDestroy(state);
+  parent.onDestroy(state);
   // renders content with with state.onChange()
-  state.refresh();
+  state.updateUi();
   const stateInfo = text("State ready");
   const parentInfo = text("Parent ready");
   const root = p(p("Not destroyed. Click me!", { onclick: parent.destroy }), stateInfo, parentInfo);

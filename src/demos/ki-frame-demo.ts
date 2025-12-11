@@ -1,5 +1,5 @@
 import { br, button, div, input, pre, setElementToId, table, td, tr } from "../domBuilder";
-import { createState } from "../state";
+import { createController, createState } from "../state";
 import { domBuilderWithState } from "./01_domBuilderStateDemo";
 import { fetchDemo } from "./02_fetchDemo";
 import { createFormStateDemo } from "./03_formDemo";
@@ -56,7 +56,7 @@ function demolist(demos: Demo[]) {
     });
   }
 
-  const state = createState();
+  const state = createController();
   const search = input({ type: "search", value: location.hash.substring(1) });
   state.addDomEvent("search", search, "keyup", () => {
     const s = search.value;

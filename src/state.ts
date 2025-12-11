@@ -1,12 +1,15 @@
-import { Channel, type Unsub } from "./channel";
+import { Channel, type Unsub, type UnwrapMaybeTuple } from "./channel";
 import type { ErrorResponse, FetchOptions } from "./fetch";
-import { PromiseDestroy } from "./promiseDestroy";
-import type { Controller, Destroyables, EventListenerInfo, EventSource, FetchInfo, State, TimeoutInfo } from "./types";
-import { createId } from "./util";
-
-type ChangeCb<T> = (obj: Readonly<T>, old: T) => void;
-type DestroyCb = () => void;
-export type ResponseMapper<T> = (response: Promise<Response>) => T;
+import { FormState, type StateFromInputTree } from "./form";
+import {
+  type CallbackInfo,
+  type Destroyable,
+  FetchDestroyable,
+  PromiseDestroy,
+  TimeoutDestroyable,
+} from "./promiseDestroy";
+import type { DestroyCb, EventSource } from "./types";
+import { createId, isDefined } from "./util";
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b;
@@ -17,224 +20,342 @@ export interface StateOptions {
   weakRef?: boolean;
 }
 
-export function createController(options?: StateOptions): Controller {
-  const { name = "state", weakRef = false } = options ?? {};
-  const stateId = createId(name);
-  const getId = () => stateId;
-  let destroyed = false;
+type ControllerDefaultEventShapes = [Readonly<{ type: "updateUi" }>];
 
-  const onChange = new Channel<[]>(`${stateId}-onChange`);
-  const onDestroy = new Channel<[]>(`${stateId}-onDestroy`);
-  const destroyables = new Set<Destroyables>();
-  const notifyChange = () => onChange.publish();
+type EventInfo = {
+  process: boolean;
+  passthrough: boolean;
+};
 
-  const idTxt = (txt: string) => `${stateId}: ${txt}`;
-  const eventListeners: EventListenerInfo<any>[] = [];
-  const eventSources: EventSource<any>[] = [];
-  const state: Controller = {
-    getId,
+type LinkControllerOptions = {
+  events?: {
+    updateUi?: boolean | EventInfo;
+    valueChange?: boolean | EventInfo;
+    destroy?: boolean | EventInfo;
+  };
+};
 
-    isDestroyed(): boolean {
-      return destroyed;
-    },
+interface LinkedController extends LinkControllerOptions {
+  controller: Controller;
+}
 
-    describe() {
-      return {
-        eventListeners,
-        name: stateId,
-      };
-    },
+export class ObjectRegister<T extends Destroyable> {
+  public readonly items = new Set<T>();
 
-    refresh() {
-      notifyChange();
-    },
+  add(item: T): () => boolean {
+    this.items.add(item);
+    return () => this.deleteAndDestroy(item);
+  }
 
-    onValueChange(cb: Unsub): Unsub {
-      if (destroyed) throw new Error(idTxt("Cannot subscribe to destroyed state"));
-      return onChange.subscribe(cb);
-    },
-    onDestroy(cb: DestroyCb): Unsub {
-      if (destroyed) {
-        // If already destroyed, call immediately (consistent behavior) and return no-op unsubscribe.
-        cb();
+  deleteAndDestroy(item: T): boolean {
+    item.destroy();
+    return this.items.delete(item);
+  }
+
+  destroy(): void {
+    for (const controller of Array.from(this.items)) {
+      controller.destroy();
+    }
+    this.items.clear();
+  }
+}
+
+export class Context implements Destroyable {
+  public readonly controllers = new ObjectRegister<Context>();
+  public readonly parent?: Context;
+
+  constructor(parent?: Context) {
+    this.parent = parent;
+  }
+
+  createController(options?: StateOptions) {
+    const controller = new Controller(this, options);
+    this.controllers.add(controller);
+    return controller;
+  }
+
+  createState<Value>(initialValue: Value, options?: StateOptions): State<Value> {
+    const state = new State(this, initialValue, options);
+    this.controllers.add(state);
+    return state;
+  }
+
+  createForm<T extends Record<string, any>>(
+    t: T,
+    init: StateFromInputTree<T>,
+    options?: {
+      validate?: (value: StateFromInputTree<T>) => boolean;
+    } & StateOptions,
+  ): FormState<T> {
+    const form = new FormState(this, t, init, options);
+    this.controllers.add(form);
+    return form;
+  }
+
+  destroy(): void {
+    this.parent?.controllers.items.delete(this);
+    this.controllers.destroy();
+  }
+}
+
+export class Controller extends Context {
+  private options: Required<StateOptions>;
+  private _destroyed = false;
+  private readonly _stateId: string;
+  private outputChannel?: Channel<ControllerDefaultEventShapes>;
+  private registeredSources = new ObjectRegister<TimeoutDestroyable | FetchDestroyable<any>>();
+  private onDestroyListeners = new ObjectRegister<Destroyable>();
+  private linkedStates = new Set<LinkedController>();
+  private eventSources: EventSource<any>[] = [];
+
+  constructor(parent: Context, options?: StateOptions) {
+    super(parent);
+    const { name = "state", weakRef = false } = options ?? {};
+    this.options = { name, weakRef };
+    this._stateId = createId(name);
+  }
+
+  private getOutputChannel() {
+    if (!isDefined(this.outputChannel)) {
+      this.outputChannel = new Channel<ControllerDefaultEventShapes>(`${this.stateId}-onChange`);
+    }
+    return this.outputChannel;
+  }
+
+  get stateId() {
+    return this._stateId;
+  }
+
+  get destroyed(): boolean {
+    return this._destroyed;
+  }
+
+  idTxt(txt: string) {
+    return `${this.stateId}: ${txt}`;
+  }
+
+  describe() {
+    return {
+      name: this.stateId,
+    };
+  }
+
+  updateUi() {
+    if (this.outputChannel) {
+      this.outputChannel.publish({ type: "updateUi" });
+    }
+  }
+
+  subscribe(cb: (events: UnwrapMaybeTuple<ControllerDefaultEventShapes>) => void): Unsub {
+    if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
+    return this.getOutputChannel().subscribe(cb);
+  }
+
+  addLinkedState<V extends Controller>(controller: V, options?: LinkControllerOptions) {
+    this.linkedStates.add({ controller, ...(options || {}) });
+  }
+
+  onDestroy(target: Destroyable | DestroyCb): Unsub {
+    if (typeof target === "function") {
+      if (this.destroyed) {
+        target();
         return () => {};
       }
-      return onDestroy.subscribe(cb);
-    },
+      const info: CallbackInfo = {
+        type: "function",
+        destroy: target as unknown as () => void,
+      };
 
-    addToDestroy(target: Destroyables): Unsub {
-      if (destroyed) {
+      return this.onDestroyListeners.add(info);
+    } else {
+      if (this.destroyed) {
         target.destroy();
         return () => {};
       }
-      destroyables.add(target);
-      return () => destroyables.delete(target);
-    },
-    addToParentDestroy<T>(parent: State<T>): Unsub {
-      return state.onDestroy(parent.addToDestroy(state));
-    },
+      this.onDestroyListeners.add(target);
+      return this.onDestroyListeners.add(target);
+    }
+  }
 
-    /** Notify onDestroy() subscribers and call .destroy() for all attached states.
-     * For an attached state also removes the state from parent.
-     * Safe to call multiple times.
-     **/
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      // Notify own destroy subscribers
-      onDestroy.publish();
-      for (const destroyable of Array.from(destroyables)) {
-        try {
-          destroyable.destroy();
-        } catch (err) {
-          console.error(idTxt(`Error in state.destroy()`), err);
-        }
+  /** Notify onDestroy() subscribers and call .destroy() for all attached states.
+   * For an attached state also removes the state from parent.
+   * Safe to call multiple times.
+   **/
+  override destroy() {
+    super.destroy();
+    if (this.destroyed) return;
+    this._destroyed = true;
+    // Go through linked states
+    for (const linkedState of Array.from(this.linkedStates)) {
+      if (!isDefined(linkedState?.events?.destroy) || linkedState.events.destroy) {
+        linkedState.controller.destroy();
       }
-      // Clear subscribers to help GC
-      destroyables.clear();
-      onChange.destroy();
-      onDestroy.destroy();
-      for (const es of eventSources) {
-        if (es.weakRefUnsub) {
-          const unsub = es.weakRefUnsub.deref();
-          if (unsub) unsub();
-          es.weakRefUnsub = undefined;
-        }
-        if (es.unsub) {
-          es.unsub();
-        }
-        es.source = undefined;
+    }
+    // registered registeredSources & subcribed functions
+    for (const destroyable of Array.from(this.registeredSources.items)) {
+      try {
+        destroyable.destroy();
+      } catch (err) {
+        console.error(this.idTxt(`Error in state.destroy()`), err);
       }
-    },
+    }
+    for (const es of this.eventSources) {
+      if (es.weakRefUnsub) {
+        const unsub = es.weakRefUnsub.deref();
+        if (unsub) unsub();
+        es.weakRefUnsub = undefined;
+      }
+      if (es.unsub) {
+        es.unsub();
+      }
+      es.source = undefined;
+    }
+    // Clear subscribers to help GC
+    this.registeredSources.items.clear();
+    this.outputChannel?.destroy();
+    this.eventSources.length = 0;
+  }
 
-    addDomEvent<K extends keyof HTMLElementEventMap>(
-      name: string,
-      node: Node,
-      type: K,
-      listener: (ev: HTMLElementEventMap[K]) => void | EventListenerObject | null,
-      options?: boolean | AddEventListenerOptions,
-    ): Unsub {
-      node.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
-      const unsub = () =>
-        node.removeEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
-      if (weakRef) {
-        eventSources.push({
-          name: `${name}: <${node.nodeName}>.${type} -> ${stateId}`,
-          type: "dom",
-          source: new WeakRef(node),
-          weakRefUnsub: new WeakRef(unsub),
-        });
-      } else {
-        eventSources.push({
-          name: `${name}: <${node.nodeName}>.${type} -> ${stateId}`,
-          type: "dom",
-          source: new WeakRef(node),
-          unsub,
-        });
-      }
-      return unsub;
-    },
-    timeout(fn: Unsub, at = 0): Unsub {
-      const id = setTimeout(() => {
-        destroy();
+  addDomEvent<K extends keyof HTMLElementEventMap>(
+    name: string,
+    node: Node,
+    type: K,
+    listener: (ev: HTMLElementEventMap[K]) => void | EventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): Unsub {
+    node.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
+    const unsub = () => node.removeEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
+    if (this.options.weakRef) {
+      this.eventSources.push({
+        name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
+        type: "dom",
+        source: new WeakRef(node),
+        weakRefUnsub: new WeakRef(unsub),
+      });
+    } else {
+      this.eventSources.push({
+        name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
+        type: "dom",
+        source: new WeakRef(node),
+        unsub,
+      });
+    }
+    return unsub;
+  }
+
+  timeout(fn: Unsub, at = 0): Unsub {
+    const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
+      new TimeoutDestroyable(() => {
+        unregisterDestroyableAndCallItsDestroy();
         fn();
-      }, at);
-      const destroy = () => {
-        clearTimeout(id);
-        destroyables.delete(info);
-      };
-      const info: TimeoutInfo = {
-        type: "timeout",
-        at: at + Date.now(),
-        destroy,
-      };
-      state.addToDestroy(info);
-      return destroy;
+      }, at),
+    );
+    return unregisterDestroyableAndCallItsDestroy;
+  }
+
+  fetch<T>(
+    url: string,
+    fetchOptions?: FetchOptions & {
+      map?: (res: Promise<Response>) => T | Promise<T>;
     },
-    fetch<T>(
-      url: string,
-      fetchOptions?: FetchOptions & {
-        map?: (res: Promise<Response>) => T | Promise<T>;
-      },
-    ): PromiseDestroy<T> | PromiseDestroy<Response> {
-      const { timeoutMs, map, assertOk = true, ...fetchInit } = fetchOptions ?? {};
-      const controller = new AbortController();
-
-      const response = fetch(url, { ...fetchInit, signal: controller.signal });
-      const maybeOkResponse = assertOk
-        ? response.then((response: Response): Response => {
-            if ((typeof assertOk === "function" && assertOk(response) === false) || !response.ok) {
-              const cause: ErrorResponse = { errorResponse: response };
-              throw cause;
-            }
-            return response;
-          })
-        : response;
-
-      // destroy is called when:
-      // - returned destroy has been called by fetch's caller
-      // - promise has completed
-      // - clear timer
-      // - state.destroy() has been called
-      const destroy = () => {
-        controller.abort();
-        timeoutUnsub?.();
-        destroyables.delete(info);
+  ): PromiseDestroy<T> | PromiseDestroy<Response> {
+    const { timeoutMs, map, assertOk = true, ...fetchInit } = fetchOptions ?? {};
+    const createAbortController = (destroy: Unsub): [AbortController, Unsub] => {
+      const abortController = new AbortController();
+      const destroyAbortController = () => {
+        timeoutUnsub();
+        abortController.abort();
+        destroy();
       };
-      const timeoutUnsub = fetchOptions?.timeoutMs ? state.timeout(destroy, fetchOptions.timeoutMs) : undefined;
-      const info: FetchInfo = { type: "fetch", url, destroy };
-      state.addToDestroy(info);
-      maybeOkResponse.finally(destroy);
+      const timeoutUnsub = this.timeout(destroyAbortController, timeoutMs);
+      return [abortController, destroyAbortController];
+    };
 
-      if (map) {
-        const mappedPromise: Promise<T> = (async () => {
-          return map(maybeOkResponse);
-        })();
-        return new PromiseDestroy(mappedPromise, destroy);
-      }
-      return new PromiseDestroy(maybeOkResponse, destroy);
-    },
-  };
-  return state;
+    const [abortController, destroyAbortController] = isDefined(timeoutMs)
+      ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
+      : [];
+
+    const response = fetch(url, { ...fetchInit, signal: abortController?.signal });
+    const maybeOkResponse = assertOk
+      ? response.then((response: Response): Response => {
+          if ((typeof assertOk === "function" && assertOk(response) === false) || !response.ok) {
+            const cause: ErrorResponse = { errorResponse: response };
+            throw cause;
+          }
+          return response;
+        })
+      : response;
+
+    // destroy() is called when state.destroy() has been called
+    // destroy() is called when timer aborts
+    const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
+      new FetchDestroyable(url, timeoutMs, maybeOkResponse, () => {
+        unregisterDestroyableAndCallItsDestroy();
+        destroyAbortController?.();
+      }),
+    );
+    // destroy() is called when promise has completed
+    maybeOkResponse.finally(unregisterDestroyableAndCallItsDestroy);
+
+    // destroy is called when returned destroy has been called by fetch's caller
+    if (map) {
+      const mappedPromise: Promise<T> = (async () => {
+        return map(maybeOkResponse);
+      })();
+      return new PromiseDestroy(mappedPromise, unregisterDestroyableAndCallItsDestroy);
+    }
+    return new PromiseDestroy(maybeOkResponse, unregisterDestroyableAndCallItsDestroy);
+  }
 }
 
-export function createState<Value>(initialValue?: Value, options?: StateOptions): State<Value> {
-  const controller = createController(options);
-  let value: Value = initialValue as Value;
+export class State<Value> extends Controller {
+  public value: Value;
+  private onChange?: Channel<[Readonly<Value>, Readonly<Value>]>;
 
-  const onChange = new Channel<[Value, Value]>(`${controller.getId()}-onChange`);
-  const notifyChange = (newV: Value, oldV: Value) => onChange.publish(newV, oldV);
+  constructor(parent: Context, initialValue: Value, options?: StateOptions) {
+    super(parent, options);
+    this.value = initialValue;
+  }
 
-  const idTxt = (txt: string) => `${controller.getId()}: ${txt}`;
-  const state: State<Value> = {
-    ...controller,
-    get() {
-      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot get value"));
-      return value;
-    },
+  get() {
+    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot get value"));
+    return this.value;
+  }
 
-    set(newObj: Value) {
-      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot set value"));
-      const old = value;
-      if (shallowEqual(old, newObj)) return;
-      value = newObj;
-      notifyChange(value, old);
-    },
+  private getOnChange() {
+    if (!isDefined(this.onChange)) {
+      this.onChange = new Channel<[Readonly<Value>, Readonly<Value>]>(`${this.stateId}-onChange`);
+    }
+    return this.onChange;
+  }
 
-    modify(fn: (cur: Readonly<Value>) => Value) {
-      if (controller.isDestroyed()) throw new Error(idTxt("State destroyed. Cannot modify"));
-      const next = fn(value);
-      state.set(next);
-    },
+  set(newObj: Value) {
+    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set value"));
+    const old = this.value;
+    if (shallowEqual(old, newObj)) return;
+    this.value = newObj;
+    this.getOnChange().publish(newObj, old);
+  }
 
-    refresh() {
-      notifyChange(value, value);
-    },
+  modify(fn: (cur: Readonly<Value>) => Value) {
+    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot modify"));
+    const next = fn(this.value);
+    this.set(next);
+  }
 
-    onValueChange(cb: ChangeCb<Value>): Unsub {
-      if (controller.isDestroyed()) throw new Error(idTxt("Cannot subscribe to destroyed state"));
-      return onChange.subscribe(cb);
-    },
-  };
-  return state;
+  onValueChange(cb: (obj: Readonly<Value>, old: Readonly<Value>) => void): Unsub {
+    if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
+    return this.getOnChange().subscribe(cb);
+  }
+
+  override destroy() {
+    super.destroy();
+    this.onChange?.destroy();
+  }
 }
+
+const defaultContext = new Context();
+
+export const createController = defaultContext.createController.bind(defaultContext);
+export const createState = defaultContext.createState.bind(defaultContext);
+export const createForm = defaultContext.createForm.bind(defaultContext);

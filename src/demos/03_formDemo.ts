@@ -1,5 +1,6 @@
 import { form, input, pre } from "../domBuilder";
-import { createFormState, formEvent } from "../form";
+import { formEvent } from "../form";
+import { createForm } from "../state";
 
 export function createFormStateDemo(init = { a: 23, b: 10 }) {
   // define dom elements
@@ -20,13 +21,13 @@ export function createFormStateDemo(init = { a: 23, b: 10 }) {
       return false;
     };
   };
-  const formData = createFormState(
+  const formData = createForm(
     {
       a: formEvent(i1, "keyup", (s) => Number(s), isDividable("a", 10)),
       b: formEvent(i2, "keyup", (s) => Number(s), isDividable("b", 5)),
     },
+    init,
     {
-      init,
       validate: ({ a, b }) => {
         const isOk = a + b === 15;
         if (isOk) {
@@ -40,12 +41,12 @@ export function createFormStateDemo(init = { a: 23, b: 10 }) {
   formData.onValueChange(({ a, b }) => {
     log(`Form data set to: a:${a} b:${b}`);
   });
-  formData.onSubmit(root, (ev) => {
+  formData.onsubmit(root, (ev) => {
     const { a, b } = formData.get();
     log(`Form submitted ${a} ${b}`);
   });
 
   // renders content with with state.onChange()
-  formData.refresh();
+  formData.updateUi();
   return root;
 }
