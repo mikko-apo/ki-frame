@@ -9,7 +9,10 @@ import {
   TimeoutDestroyable,
 } from "./promiseDestroy";
 import type { DestroyCb, EventSource } from "./types";
-import { copyAndSet, createId, isDefined } from "./util";
+import { createId } from "./util/objectIdCounter";
+import { copyAndSet } from "./util/setByPath";
+import { DestroyableSet } from "./util/strongOrWeakSet";
+import { isDefined } from "./util/typeUtils";
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b;
@@ -39,34 +42,11 @@ interface LinkedController extends LinkControllerOptions {
   controller: Controller;
 }
 
-export class ObjectRegister<T extends Destroyable> {
-  public readonly items = new Set<T>();
-
-  add(item: T): () => boolean {
-    this.items.add(item);
-    return () => this.deleteAndDestroy(item);
-  }
-
-  deleteAndDestroy(item: T): boolean {
-    item.destroy();
-    return this.items.delete(item);
-  }
-
-  destroy(): void {
-    for (const controller of Array.from(this.items)) {
-      controller.destroy();
-    }
-    this.items.clear();
-  }
-}
-
 export class Context implements Destroyable {
-  public readonly controllers = new ObjectRegister<Context>();
-  public readonly parent?: Context;
-
-  constructor(parent?: Context) {
-    this.parent = parent;
-  }
+  constructor(
+    public readonly parent?: Context,
+    public readonly controllers = new DestroyableSet<Context>("weak"),
+  ) {}
 
   createController(options?: StateOptions) {
     const controller = new Controller(this, options);
@@ -93,7 +73,7 @@ export class Context implements Destroyable {
   }
 
   destroy(): void {
-    this.parent?.controllers.items.delete(this);
+    this.parent?.controllers.delete(this);
     this.controllers.destroy();
   }
 }
@@ -103,13 +83,13 @@ export class Controller extends Context {
   private _destroyed = false;
   private readonly _stateId: string;
   private outputChannel?: Channel<ControllerDefaultEventShapes>;
-  private registeredSources = new ObjectRegister<TimeoutDestroyable | FetchDestroyable<any>>();
-  private onDestroyListeners = new ObjectRegister<Destroyable>();
+  private registeredSources = new DestroyableSet<TimeoutDestroyable | FetchDestroyable<any>>();
+  private onDestroyListeners = new DestroyableSet<Destroyable>();
   private linkedStates = new Set<LinkedController>();
   private eventSources: EventSource<any>[] = [];
 
   constructor(parent: Context, options?: StateOptions) {
-    super(parent);
+    super(parent, new DestroyableSet<Context>());
     const { name = "state", weakRef = false } = options ?? {};
     this.options = { name, weakRef };
     this._stateId = createId(name);
@@ -172,7 +152,6 @@ export class Controller extends Context {
         target.destroy();
         return () => {};
       }
-      this.onDestroyListeners.add(target);
       return this.onDestroyListeners.add(target);
     }
   }
@@ -192,13 +171,8 @@ export class Controller extends Context {
       }
     }
     // registered registeredSources & subcribed functions
-    for (const destroyable of Array.from(this.registeredSources.items)) {
-      try {
-        destroyable.destroy();
-      } catch (err) {
-        console.error(this.idTxt(`Error in state.destroy()`), err);
-      }
-    }
+    this.registeredSources.destroy();
+    this.onDestroyListeners.destroy();
     for (const es of this.eventSources) {
       if (es.weakRefUnsub) {
         const unsub = es.weakRefUnsub.deref();
@@ -211,7 +185,6 @@ export class Controller extends Context {
       es.source = undefined;
     }
     // Clear subscribers to help GC
-    this.registeredSources.items.clear();
     this.outputChannel?.destroy();
     this.eventSources.length = 0;
   }
@@ -365,14 +338,14 @@ export class FormState<T extends Record<string, any>> extends State<StateFromInp
     super(parent, init, stateOptions);
     const inputs = collectFormsInputs(t);
     if (validate) {
-      const validInputValues = this.createState(init, { name: "valid input values" });
-      validInputValues.onValueChange((newState) => {
+      const validInputValuesState = this.createState(init, { name: "valid input values" });
+      validInputValuesState.onValueChange((newState) => {
         if (!validate(newState)) {
           return;
         }
         this.set(newState);
       });
-      this.attachListeners(validInputValues, inputs);
+      this.attachListeners(validInputValuesState, inputs);
     } else {
       this.attachListeners(this, inputs);
     }

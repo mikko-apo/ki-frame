@@ -402,7 +402,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
                 * error logging
                 * return error
         * tooling
-    * convert to class
     * root node event listener & delegation directly to listener
     * state.link() for attaching existing states together
         * prevent state circles
@@ -410,7 +409,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     * context contains
         * default configurations for created objects
         * document reference for domBuilder
-        * links to created states
         * root id + main counter
         * centralized logging
     * provides connection point for improved developer tooling
