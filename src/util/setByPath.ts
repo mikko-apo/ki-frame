@@ -1,11 +1,3 @@
-import type { ErrorResponse } from "./fetch";
-
-let runningId = 0;
-
-export function createId(id: string) {
-  return `${id}-${runningId++}`;
-}
-
 /** mutates the target **/
 export function setByPath(obj: any, path: string | Array<string | number>, value: any): void {
   if (typeof path === "string") {
@@ -89,8 +81,4 @@ export function copyAndSet<T = any>(obj: any, path: Path, value: any): T {
   }
 
   return newChild as T;
-}
-
-export function isDefined<T>(item: T | null | undefined): item is T {
-  return item !== undefined && item !== null;
 }

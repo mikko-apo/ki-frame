@@ -1,44 +1,9 @@
 "use strict";
 (() => {
-  // src/util.ts
+  // src/util/objectIdCounter.ts
   var runningId = 0;
   function createId(id) {
     return `${id}-${runningId++}`;
-  }
-  function copyAndSet(obj, path, value) {
-    const segments = Array.isArray(path) ? path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2) : path === "" ? [] : path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
-    if (segments.length === 0) return value;
-    const parents = [];
-    let cur = obj;
-    parents.push(cur);
-    for (const seg of segments) {
-      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
-      parents.push(cur);
-    }
-    let newChild = value;
-    for (let i2 = segments.length - 1; i2 >= 0; i2--) {
-      const key = segments[i2];
-      const origParent = parents[i2];
-      let newParent;
-      if (Array.isArray(origParent)) {
-        newParent = origParent.slice();
-      } else if (origParent !== null && typeof origParent === "object") {
-        newParent = { ...origParent };
-      } else {
-        newParent = typeof key === "number" ? [] : {};
-      }
-      if (Array.isArray(newParent) && typeof key === "number") {
-        if (key >= newParent.length) {
-          newParent.length = key + 1;
-        }
-      }
-      newParent[key] = newChild;
-      newChild = newParent;
-    }
-    return newChild;
-  }
-  function isDefined(item) {
-    return item !== void 0 && item !== null;
   }
 
   // src/channel.ts
@@ -218,33 +183,133 @@
     }
   };
 
+  // src/util/setByPath.ts
+  function copyAndSet(obj, path, value) {
+    const segments = Array.isArray(path) ? path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2) : path === "" ? [] : path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
+    if (segments.length === 0) return value;
+    const parents = [];
+    let cur = obj;
+    parents.push(cur);
+    for (const seg of segments) {
+      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
+      parents.push(cur);
+    }
+    let newChild = value;
+    for (let i2 = segments.length - 1; i2 >= 0; i2--) {
+      const key = segments[i2];
+      const origParent = parents[i2];
+      let newParent;
+      if (Array.isArray(origParent)) {
+        newParent = origParent.slice();
+      } else if (origParent !== null && typeof origParent === "object") {
+        newParent = { ...origParent };
+      } else {
+        newParent = typeof key === "number" ? [] : {};
+      }
+      if (Array.isArray(newParent) && typeof key === "number") {
+        if (key >= newParent.length) {
+          newParent.length = key + 1;
+        }
+      }
+      newParent[key] = newChild;
+      newChild = newParent;
+    }
+    return newChild;
+  }
+
+  // src/util/strongOrWeakSet.ts
+  var StrongOrWeakSet = class {
+    constructor(mode) {
+      this.coerce = mode;
+    }
+    *all() {
+      if (this.items) {
+        for (const i2 of this.items) {
+          if (i2 instanceof WeakRef) {
+            const deref = i2.deref();
+            if (deref === void 0) {
+              this.items.delete(i2);
+            } else {
+              yield deref;
+            }
+          } else {
+            yield i2;
+          }
+        }
+      }
+    }
+    add(item, itemMode = this.coerce) {
+      const weakRef = new WeakRef(item);
+      const unsub = () => {
+        const deref = weakRef.deref();
+        if (deref) {
+          this.delete(deref);
+        }
+      };
+      for (const i2 of this.all()) {
+        if (i2 === item) {
+          return unsub;
+        }
+      }
+      const newItem = itemMode === "weak" ? weakRef : item;
+      if (!this.items) {
+        this.items = /* @__PURE__ */ new Set();
+      }
+      this.items.add(newItem);
+      return unsub;
+    }
+    delete(item) {
+      if (this.items) {
+        for (const i2 of this.items) {
+          if (i2 instanceof WeakRef) {
+            const deref = i2.deref();
+            if (deref === void 0 || deref === item) {
+              this.items.delete(i2);
+            }
+          } else {
+            if (i2 === item) {
+              this.items.delete(i2);
+            }
+          }
+        }
+        if (this.items.size === 0) {
+          this.destroy();
+        }
+      }
+    }
+    destroy() {
+      if (this.items) {
+        this.items.clear();
+        this.items = void 0;
+      }
+    }
+  };
+  var DestroyableSet = class extends StrongOrWeakSet {
+    destroy() {
+      for (const destroyable of this.all()) {
+        try {
+          destroyable.destroy();
+        } catch (err) {
+          console.error(`Error in destroying item`, err);
+        }
+      }
+      super.destroy();
+    }
+  };
+
+  // src/util/typeUtils.ts
+  function isDefined(item) {
+    return item !== void 0 && item !== null;
+  }
+
   // src/state.ts
   function shallowEqual(a2, b2) {
     return a2 === b2;
   }
-  var ObjectRegister = class {
-    constructor() {
-      this.items = /* @__PURE__ */ new Set();
-    }
-    add(item) {
-      this.items.add(item);
-      return () => this.deleteAndDestroy(item);
-    }
-    deleteAndDestroy(item) {
-      item.destroy();
-      return this.items.delete(item);
-    }
-    destroy() {
-      for (const controller of Array.from(this.items)) {
-        controller.destroy();
-      }
-      this.items.clear();
-    }
-  };
   var Context = class {
-    constructor(parent) {
-      this.controllers = new ObjectRegister();
+    constructor(parent, controllers = new DestroyableSet("weak")) {
       this.parent = parent;
+      this.controllers = controllers;
     }
     createController(options) {
       const controller = new Controller(this, options);
@@ -263,16 +328,16 @@
     }
     destroy() {
       var _a2;
-      (_a2 = this.parent) == null ? void 0 : _a2.controllers.items.delete(this);
+      (_a2 = this.parent) == null ? void 0 : _a2.controllers.delete(this);
       this.controllers.destroy();
     }
   };
   var Controller = class extends Context {
     constructor(parent, options) {
-      super(parent);
+      super(parent, new DestroyableSet());
       this._destroyed = false;
-      this.registeredSources = new ObjectRegister();
-      this.onDestroyListeners = new ObjectRegister();
+      this.registeredSources = new DestroyableSet();
+      this.onDestroyListeners = new DestroyableSet();
       this.linkedStates = /* @__PURE__ */ new Set();
       this.eventSources = [];
       const { name = "state", weakRef = false } = options != null ? options : {};
@@ -329,7 +394,6 @@
           return () => {
           };
         }
-        this.onDestroyListeners.add(target);
         return this.onDestroyListeners.add(target);
       }
     }
@@ -347,13 +411,8 @@
           linkedState.controller.destroy();
         }
       }
-      for (const destroyable of Array.from(this.registeredSources.items)) {
-        try {
-          destroyable.destroy();
-        } catch (err) {
-          console.error(this.idTxt(`Error in state.destroy()`), err);
-        }
-      }
+      this.registeredSources.destroy();
+      this.onDestroyListeners.destroy();
       for (const es of this.eventSources) {
         if (es.weakRefUnsub) {
           const unsub = es.weakRefUnsub.deref();
@@ -365,7 +424,6 @@
         }
         es.source = void 0;
       }
-      this.registeredSources.items.clear();
       (_b = this.outputChannel) == null ? void 0 : _b.destroy();
       this.eventSources.length = 0;
     }
@@ -478,14 +536,14 @@
       super(parent, init, stateOptions);
       const inputs = collectFormsInputs(t);
       if (validate) {
-        const validInputValues = this.createState(init, { name: "valid input values" });
-        validInputValues.onValueChange((newState) => {
+        const validInputValuesState = this.createState(init, { name: "valid input values" });
+        validInputValuesState.onValueChange((newState) => {
           if (!validate(newState)) {
             return;
           }
           this.set(newState);
         });
-        this.attachListeners(validInputValues, inputs);
+        this.attachListeners(validInputValuesState, inputs);
       } else {
         this.attachListeners(this, inputs);
       }
@@ -518,6 +576,7 @@
 
   // src/index.ts
   var defaultContext = new Context();
+  var getDefaultContext = () => defaultContext;
   var createController = defaultContext.createController.bind(defaultContext);
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
@@ -932,7 +991,7 @@
           src.replaceChildren(pre(demo2.fn.toString()));
         }
       });
-      const row = tr(td(launchDemo, br(), demo2.title), src, target);
+      const row = tr(td(launchDemo, br(), demo2.title), target, src);
       row.style = "vertical-align: baseline";
       return row;
     }, demo);
@@ -955,7 +1014,24 @@
       filterDemos(s2);
     });
     filterDemos(location.hash.substring(1));
-    return div(search2, table(rows));
+    return div(
+      search2,
+      hr(),
+      table(rows),
+      hr(),
+      button("log context", {
+        onclick: () => {
+          if (window.gc) {
+            const original = Array.from(getDefaultContext().controllers.all()).length;
+            window.gc();
+            console.log(
+              `Ran window.gc(). Controller count before ${original} after ${Array.from(getDefaultContext().controllers.all()).length}`
+            );
+          }
+          console.log(getDefaultContext());
+        }
+      })
+    );
   }
   setElementToId("app", demolist(demos));
 })();

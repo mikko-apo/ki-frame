@@ -1,5 +1,5 @@
-import { createController } from "..";
-import { br, button, div, input, pre, setElementToId, table, td, tr } from "../domBuilder";
+import { createController, getDefaultContext } from "..";
+import { br, button, div, hr, input, pre, setElementToId, table, td, tr } from "../domBuilder";
 import { domBuilderWithState } from "./01_domBuilderStateDemo";
 import { fetchDemo } from "./02_fetchDemo";
 import { createFormStateDemo } from "./03_formDemo";
@@ -39,7 +39,7 @@ function demolist(demos: Demo[]) {
         src.replaceChildren(pre(demo.fn.toString()));
       },
     });
-    const row = tr(td(launchDemo, br(), demo.title), src, target);
+    const row = tr(td(launchDemo, br(), demo.title), target, src);
     row.style = "vertical-align: baseline";
     return row;
   }, demo);
@@ -64,7 +64,24 @@ function demolist(demos: Demo[]) {
     filterDemos(s);
   });
   filterDemos(location.hash.substring(1));
-  return div(search, table(rows));
+  return div(
+    search,
+    hr(),
+    table(rows),
+    hr(),
+    button("log context", {
+      onclick: () => {
+        if (window.gc) {
+          const original = Array.from(getDefaultContext().controllers.all()).length;
+          window.gc();
+          console.log(
+            `Ran window.gc(). Controller count before ${original} after ${Array.from(getDefaultContext().controllers.all()).length}`,
+          );
+        }
+        console.log(getDefaultContext());
+      },
+    }),
+  );
 }
 
 setElementToId("app", demolist(demos));
