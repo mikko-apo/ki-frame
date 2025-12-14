@@ -1,19 +1,27 @@
-import { createState } from "..";
-import { css } from "../css";
-import { div, p, text } from "../domBuilder";
+import {createState} from "..";
+import {css} from "../css";
+import {div, p, text} from "../domBuilder";
 
 export function domBuilderWithState() {
   // DOM structure setup for testing
   const createNodes = () => {
     const info = text();
-    const root = p("Click to update counter", div(info, css({ color: "green" })));
-    return { info, root };
+    const root = p("Click to update counter",
+      div(info, css(
+          {color: "green"},
+          {color: "cyan"},
+          css({color: "red"}, {color: "cyan"}),
+          [{color: "tan"}],
+          [css({color: "blue"})]
+        ),
+      ));
+    return {info, root};
   };
 
-  function counter(state = createState({ total: 0 })) {
+  function counter(state = createState({total: 0})) {
     const nodes = createNodes();
     // connect subscribers
-    state.addDomEvent("counter", nodes.root, "click", (ev) => state.set((cur) => ({ total: cur.total + 1 })));
+    state.addDomEvent("counter", nodes.root, "click", (ev) => state.set((cur) => ({total: cur.total + 1})));
     state.onValueChange((obj) => {
       nodes.info.nodeValue = `Counter: ${obj.total}`;
     });

@@ -7,14 +7,24 @@ import { isDefined } from "./util/typeUtils";
  */
 export type StyleValue = string | number | Array<string | number>;
 //export type StyleObject = CSS.Properties<string | number | Array<string | number>>;
-export type StyleObject = CSSType.Properties;
+export type StyleObject = (CSSType.Properties | CSS) | StyleObject[];
 
-export function css(style: StyleObject): CSS {
-  return new CSS(style);
+export function css(...inputs: StyleObject[]): CSS {
+  const flat: CSSType.Properties = {};
+
+  for (const input of Array.from(inputs).flat()) {
+    if (input instanceof CSS) {
+      Object.assign(flat, input.styles);
+    } else {
+      Object.assign(flat, input);
+    }
+  }
+  return new CSS(flat);
 }
 
+
 export class CSS {
-  constructor(public readonly styles: StyleObject) {}
+  constructor(public readonly styles: CSSType.Properties) {}
 }
 /**
  * Set of properties that should get a "px" suffix when given a bare number.

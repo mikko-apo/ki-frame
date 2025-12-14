@@ -470,7 +470,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     * form validation
     * state validation
 * styles and classes
-    * css() & CSS should support multiple parameters
     * &gt;style> & class support
     * support plain numbers for px
 * domBuilder
