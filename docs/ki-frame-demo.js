@@ -509,16 +509,19 @@
       return this.onChange;
     }
     set(newObj) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set value"));
+      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
       const old = this.value;
-      if (shallowEqual(old, newObj)) return;
-      this.value = newObj;
-      this.getOnChange().publish(newObj, old);
+      const finalObj = typeof newObj === "function" ? newObj(this.value) : newObj;
+      if (shallowEqual(old, finalObj)) return;
+      this.value = finalObj;
+      this.getOnChange().publish(finalObj, old);
     }
-    modify(fn) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot modify"));
-      const next = fn(this.value);
-      this.set(next);
+    update(update) {
+      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
+      if (typeof this.value !== "object") {
+      }
+      const finalUpdate = typeof update === "function" ? update(this.value) : update;
+      this.set({ ...this.value, ...finalUpdate });
     }
     onValueChange(cb) {
       if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
@@ -581,6 +584,98 @@
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
 
+  // src/css.ts
+  function css(style2) {
+    return new CSS(style2);
+  }
+  var CSS = class {
+    constructor(styles) {
+      this.styles = styles;
+    }
+  };
+  var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
+    // common layout/size props
+    "width",
+    "height",
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "minWidth",
+    "minHeight",
+    "maxWidth",
+    "maxHeight",
+    "margin",
+    "marginTop",
+    "marginBottom",
+    "marginLeft",
+    "marginRight",
+    "padding",
+    "paddingTop",
+    "paddingBottom",
+    "paddingLeft",
+    "paddingRight",
+    "gap",
+    "rowGap",
+    "columnGap",
+    "fontSize",
+    "borderWidth",
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+    "borderRadius",
+    "outlineWidth",
+    "letterSpacing",
+    "lineHeight"
+  ]);
+  function convertPrimitiveValue(prop, val) {
+    if (val === null || val === void 0) return "";
+    if (typeof val === "number") {
+      if (prop.startsWith("--")) return String(val);
+      if (UNIT_PX_PROPS.has(prop)) return `${val}px`;
+      return String(val);
+    }
+    return String(val);
+  }
+  function convertArrayValue(prop, arr) {
+    const flat = [];
+    for (const v of arr) {
+      if (Array.isArray(v)) {
+        for (const vv of v) flat.push(vv);
+      } else {
+        flat.push(v);
+      }
+    }
+    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
+    return parts.join(", ");
+  }
+  function applyCss(el, style2) {
+    for (const key in style2) {
+      if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
+      const raw = style2[key];
+      if (isDefined(raw)) {
+        if (key.startsWith("--")) {
+          if (Array.isArray(raw)) {
+            const val = convertArrayValue(key, raw);
+            el.style.setProperty(key, val);
+          } else {
+            const val = convertPrimitiveValue(key, raw);
+            el.style.setProperty(key, val);
+          }
+          continue;
+        }
+        let finalValue;
+        if (Array.isArray(raw)) {
+          finalValue = convertArrayValue(key, raw);
+        } else {
+          finalValue = convertPrimitiveValue(key, raw);
+        }
+        el.style[key] = finalValue;
+      }
+    }
+  }
+
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
@@ -600,12 +695,19 @@
         element.appendChild(arg);
       } else if (arg instanceof WrappedNode) {
         element.appendChild(arg.node);
+      } else if (arg instanceof CSS) {
+        applyCss(element, arg.styles);
       } else if (typeof arg === "string") {
         element.appendChild(getDocument().createTextNode(arg));
       } else if (typeof arg === "object") {
-        Object.keys(arg).forEach((key) => {
-          const argValue = arg[key];
-          if (key.startsWith("on") && typeof argValue === "function") {
+        Object.entries(arg).forEach(([key, argValue]) => {
+          if (key === "class") {
+            if (Array.isArray(argValue)) {
+              element.classList.add(...argValue);
+            } else {
+              element.classList.add(argValue);
+            }
+          } else if (key.startsWith("on") && typeof argValue === "function") {
             const event = key.substring(2).toLowerCase();
             element.addEventListener(event, argValue);
           } else {
@@ -757,12 +859,12 @@
   function domBuilderWithState() {
     const createNodes = () => {
       const info = text();
-      const root = p("Click to update counter", info);
+      const root = p("Click to update counter", div(info, css({ color: "green" })));
       return { info, root };
     };
     function counter(state = createState({ total: 0 })) {
       const nodes = createNodes();
-      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
+      state.addDomEvent("counter", nodes.root, "click", (ev) => state.set((cur) => ({ total: cur.total + 1 })));
       state.onValueChange((obj) => {
         nodes.info.nodeValue = `Counter: ${obj.total}`;
       });
@@ -834,7 +936,7 @@
     formData.onValueChange(({ a: a2, b: b2 }) => {
       log(`Form data set to: a:${a2} b:${b2}`);
     });
-    formData.onsubmit(root, (ev) => {
+    formData.onsubmit(root, () => {
       const { a: a2, b: b2 } = formData.get();
       log(`Form submitted ${a2} ${b2}`);
     });
@@ -876,19 +978,19 @@
     }
     state.updateUi();
     return p("Total: ", infoText(state), {
-      onclick: () => state.modify((cur) => ({ total: cur.total + 1 }))
+      onclick: () => state.set((cur) => ({ total: cur.total + 1 }))
     });
   }
 
   // src/demos/simpleFormDemo.ts
   function simpleForm() {
-    const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", (ev) => {
+    const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", () => {
       if (validate) {
         if (validate(node.value)) {
           return;
         }
       }
-      state.modify((cur) => ({ ...cur, [key]: node.value }));
+      state.set((cur) => ({ ...cur, [key]: node.value }));
     });
     function simpleForm2(formData = createState({ a: "23", b: "234" })) {
       const i1 = input();
@@ -906,7 +1008,7 @@
         "i2",
         i2,
         "b",
-        (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`)
+        (v) => v.length % 2 === 0 && log(`b value '${v}' has wrong length ${v.length}`)
       );
       formData.onValueChange(({ a: a2, b: b2 }) => {
         i1.value = a2;
@@ -931,7 +1033,9 @@
     const info = (txt, s2) => {
       const t = text();
       s2.onValueChange((obj) => t.nodeValue = `${txt}: ${obj.total}`);
-      s2.onDestroy(() => t.nodeValue = `${txt}: state destroyed`);
+      s2.onDestroy(() => {
+        t.nodeValue = `${txt}: state destroyed`;
+      });
       return p(t);
     };
     const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
@@ -960,7 +1064,7 @@
   function stateTimeoutDemo() {
     const b1 = button("Click me!");
     const state = createController();
-    state.addDomEvent("start timeout", b1, "click", (ev) => {
+    state.addDomEvent("start timeout", b1, "click", () => {
       b1.textContent = "Waiting...";
       state.timeout(() => b1.textContent = "Ready!", 1e3);
     });
@@ -1001,7 +1105,7 @@
         if (searchString.length > 2) {
           rows[index].hidden = demoFn.indexOf(searchString) === -1;
         }
-        if (searchString.length == 0) {
+        if (searchString.length === 0) {
           rows[index].hidden = false;
         }
       });

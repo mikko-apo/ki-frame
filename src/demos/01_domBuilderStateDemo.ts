@@ -1,11 +1,12 @@
 import { createState } from "..";
-import { p, text } from "../domBuilder";
+import { css } from "../css";
+import { div, p, text } from "../domBuilder";
 
 export function domBuilderWithState() {
   // DOM structure setup for testing
   const createNodes = () => {
     const info = text();
-    const root = p("Click to update counter", info);
+    const root = p("Click to update counter", div(info, css({ color: "green" })));
     return { info, root };
   };
 

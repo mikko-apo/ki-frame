@@ -1,7 +1,11 @@
+import { applyCss, CSS } from "./css";
 import { WrappedNode } from "./types";
 
-type CreateElementTypes = HTMLElement | Text | string | WrappedNode;
-type CreateElementArg<N extends Node> = CreateElementTypes | Array<CreateElementTypes> | Partial<N>;
+type CreateElementTypes = HTMLElement | Text | string | WrappedNode | CSS;
+type CreateElementArg<N extends Node> =
+  | CreateElementTypes
+  | CreateElementTypes[]
+  | Partial<N & { class: string | string[] }>;
 export type CreateElementArgs<N extends Node> = CreateElementArg<N>[];
 
 function addItems<N extends Node>(element: HTMLElement, ...args: CreateElementArgs<N>) {
@@ -12,12 +16,19 @@ function addItems<N extends Node>(element: HTMLElement, ...args: CreateElementAr
       element.appendChild(arg);
     } else if (arg instanceof WrappedNode) {
       element.appendChild(arg.node);
+    } else if (arg instanceof CSS) {
+      applyCss(element, arg.styles);
     } else if (typeof arg === "string") {
       element.appendChild(getDocument().createTextNode(arg));
     } else if (typeof arg === "object") {
-      Object.keys(arg).forEach((key) => {
-        const argValue = (arg as any)[key];
-        if (key.startsWith("on") && typeof argValue === "function") {
+      Object.entries(arg).forEach(([key, argValue]) => {
+        if (key === "class") {
+          if (Array.isArray(argValue)) {
+            element.classList.add(...argValue);
+          } else {
+            element.classList.add(argValue);
+          }
+        } else if (key.startsWith("on") && typeof argValue === "function") {
           const event = key.substring(2).toLowerCase();
           element.addEventListener(event, argValue);
         } else {
