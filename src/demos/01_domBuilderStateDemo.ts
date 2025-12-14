@@ -12,7 +12,7 @@ export function domBuilderWithState() {
   function counter(state = createState({ total: 0 })) {
     const nodes = createNodes();
     // connect subscribers
-    state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
+    state.addDomEvent("counter", nodes.root, "click", (ev) => state.set((cur) => ({ total: cur.total + 1 })));
     state.onValueChange((obj) => {
       nodes.info.nodeValue = `Counter: ${obj.total}`;
     });

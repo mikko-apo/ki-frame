@@ -3,20 +3,20 @@ import { form, input, pre } from "../domBuilder";
 
 export function simpleForm() {
   // generic helper function
-  const domTextInput = <T, K extends keyof T>(
+  const domTextInput = <T extends object, K extends keyof T>(
     state: State<T>,
     name: string,
     node: HTMLInputElement,
     key: K,
     validate?: (v: string) => boolean,
   ) =>
-    state.addDomEvent(name, node, "keyup", (ev) => {
+    state.addDomEvent(name, node, "keyup", () => {
       if (validate) {
         if (validate(node.value)) {
           return;
         }
       }
-      state.modify((cur) => ({ ...cur, [key]: node.value }));
+      state.set((cur) => ({ ...cur, [key]: node.value }));
     });
 
   // since there is no form api, here's an example on how to do that with the basic ki-frame api
@@ -38,7 +38,7 @@ export function simpleForm() {
       "i2",
       i2,
       "b",
-      (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`),
+      (v) => v.length % 2 === 0 && log(`b value '${v}' has wrong length ${v.length}`),
     );
     formData.onValueChange(({ a, b }) => {
       i1.value = a;

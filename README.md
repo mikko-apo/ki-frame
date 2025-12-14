@@ -42,7 +42,9 @@ A concise, expressive utility for constructing and managing DOM trees:
 More information:
 
 - documentation: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
-- code: [domBuilder.ts](src/domBuilder.ts)
+- code:
+    - [domBuilder.ts](src/domBuilder.ts)
+    - [css.ts](src/css.ts)
 
 ## State
 
@@ -124,20 +126,27 @@ More information:
 1. Create DOM node trees with the fluent syntax
 2. Extract a variable for each HTMLElement or Text node that you want access separately. Pass the nodes as variables how
    you want.
-3. Each builder function creates the specified dom object and takes a list of parameters. Supported parameters are:
+3. Each HTMLElement builder function creates the specified dom object and takes a list of parameters. Supported
+   parameters are:
     * dom **HTMLElement** or **Text** instance is added with `.appendChild()`
     * **string** is added with `.appendChild(getDocument().createTextNode(arg))`
     * **arrays** are iterated recursively and each item is added to the object
     * **WrappedNode** is used by dom extension APIs and contains the resulting dom Node instance. Is added to the object
       with .appendChild(arg.node)
+    * *CSS* object which is created with `css()`
+        * CSS code completition is implemented with https://github.com/frenic/csstype
+        * multiple CSS definitions can be passed to objects, processing order is depth first
+        * CSS definitions can be shared between multiple objects
     * **object** which contains fields from HTMLElement and Text
         * fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
         * otherwise the key and value is set with `.setAttribute(key, value)`
+    * object's fields can be set with ´{href: """}´ syntax, this exposes **Partial<HTMLElement&gt; and some fields might
+      not work
 
 ```typescript
 import {a, p, setElementToId} from "./domBuilder";
 
-const a1 = a("test link", {href: "/pow.html"});
+const a1 = a("test link", {href: "/pow.html"}, css({color: 'red'}));
 setElementToId('app', p("POW!", a1, {onclick: () => console.log("pow!")}));
 ```
 
@@ -153,9 +162,9 @@ reference inside the application to other functions and DOM nodes. Use `state.on
 
 State supports following functions for setting and notifying of state change:
 
-- `state.set(cur)` sets new state value
-- `state.modify(fn: (old: ReadOnly<T>) => T)` fn() can create new state based on the old state
-- `state.onChange(fn: (cur: ReadOnly<T>, old: ReadOnly<T>) => void): () => void` fn() can react to changes.
+- `state.set(cur | fn: (old: T) => T)` sets new state value
+- `state.update(partial | fn: (old: T) => Partial<T>)` fn() can create new state based on the old state
+- `state.onChange(fn: (cur: T, old: T) => void): () => void` fn() can react to changes.
   `.onChange()`
   returns the unsubscribe function
 
@@ -172,7 +181,7 @@ const createNodes = () => {
 
 function counter(state = createState({total: 0})) {
   const nodes = createNodes();
-  nodes.root.onclick = () => state.modify((cur) => ({total: cur.total + 1}));
+  nodes.root.onclick = () => state.set((cur) => ({total: cur.total + 1}));
   state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
   state.refresh();
   return nodes;
@@ -255,7 +264,7 @@ const createNodes = () => {
 function counter(state = createState({total: 0})) {
   const nodes = createNodes();
   // connect subscribers
-  state.addDomEvent("counter", nodes.root, "click", () => state.modify((cur) => ({total: cur.total + 1})));
+  state.addDomEvent("counter", nodes.root, "click", () => state.set((cur) => ({total: cur.total + 1})));
   state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
   // render content with state.refresh()
   state.refresh();
@@ -364,12 +373,12 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
             - state linking: events and data
             - event propagation
             - resource management
-              - fetch, timeout
-              - promise
+                - fetch, timeout
+                - promise
         - context
-          - defaults
-          - states and app structure
-          - logging
+            - defaults
+            - states and app structure
+            - logging
         - form
 - 2.0 SSR
 
@@ -391,7 +400,7 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
         * weakref/regular ref
     * gc/cleanup
         * weakReff️
-        * onRemoveDestroy(node) - MutationObserver 
+        * onRemoveDestroy(node) - MutationObserver
             * MutationObserver and WeakRef + FinalizationRegistry
         * assertions
             * allowedSources
@@ -452,15 +461,20 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
         * execute fn and remove timeout before it triggers
     * XHR integration
         * abort
-* router
+* router & url handling
     * tigher integration with browser urls
     * initialize application based on route parameters
     * control application url and actions based on user actions
     * port of https://github.com/mikko-apo/ki-router.js
 * Standard Schema support
-  * form validation
-  * state validation
-* classes and styles
+    * form validation
+    * state validation
+* styles and classes
+    * css() & CSS should support multiple parameters
+    * &gt;style> & class support
+    * support plain numbers for px
+* domBuilder
+    * event() syntax: `a(event({click: ({ev, node, value}) => {...}}))`
 
 **Bubbling under**
 
@@ -495,7 +509,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
   * IntersectionObserver - Lazy-load images/components when entering viewport.
   * Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate progressively or lazy-load components.
   * Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
-  * 
   * SSR
       * Not yet
       * domBuilder and state resource registration and jsdom can be used to collect data for SSR

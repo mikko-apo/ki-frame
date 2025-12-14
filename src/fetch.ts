@@ -4,6 +4,6 @@ export type FetchOptions = RequestInit & {
 };
 export type ErrorResponse = { errorResponse: Response };
 
-export function isErrorResponse<T>(item: any): item is ErrorResponse {
+export function isErrorResponse(item: any): item is ErrorResponse {
   return "errorResponse" in item;
 }

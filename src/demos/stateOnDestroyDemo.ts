@@ -10,7 +10,9 @@ export function onDestroyTwoNodes() {
   const info = (txt: string, s: State<Total>) => {
     const t = text();
     s.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
-    s.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`));
+    s.onDestroy(() => {
+      t.nodeValue = `${txt}: state destroyed`;
+    });
     return p(t);
   };
   const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));

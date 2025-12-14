@@ -42,7 +42,7 @@ export function createFormStateDemo(init = { a: 23, b: 10 }) {
   formData.onValueChange(({ a, b }) => {
     log(`Form data set to: a:${a} b:${b}`);
   });
-  formData.onsubmit(root, (ev) => {
+  formData.onsubmit(root, () => {
     const { a, b } = formData.get();
     log(`Form submitted ${a} ${b}`);
   });
