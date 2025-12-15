@@ -1,25 +1,48 @@
-import { createState } from "..";
-import { p, text } from "../domBuilder";
+import { createState, type State } from "..";
+import { button, div, p, text } from "../domBuilder";
+import { events } from "../domBuilderEvents";
+import { styles } from "../domBuilderStyles";
 
 export function domBuilderWithState() {
   // DOM structure setup for testing
-  const createNodes = () => {
+  const createNodes = (state: State<{ total: number }>) => {
     const info = text();
-    const root = p("Click to update counter", info);
-    return { info, root };
+    const root = p(
+      "Click this text to update counter",
+      {
+        styles: {
+          color: "red",
+        },
+        events: {
+          click() {
+            state.set((cur) => ({ total: cur.total + 1 }));
+          },
+        },
+      },
+      div(info, styles({ color: "green" })),
+    );
+    state.onValueChange((obj) => {
+      info.nodeValue = `Counter: ${obj.total}`;
+    });
+    return root;
   };
 
   function counter(state = createState({ total: 0 })) {
-    const nodes = createNodes();
+    const root = createNodes(state);
+    // unmanaged click listener, will be removed when <div> returned counter() is removed from DOM tree
+    const reset = button(
+      "Reset",
+      events({
+        click() {
+          state.set({ total: 0 });
+        },
+      }),
+    );
     // connect subscribers
-    state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
-    state.onValueChange((obj) => {
-      nodes.info.nodeValue = `Counter: ${obj.total}`;
-    });
     // render content with state.refresh()
     state.updateUi();
-    return nodes;
+    return div(root, reset);
   }
 
-  return counter().root;
+  return counter();
 }

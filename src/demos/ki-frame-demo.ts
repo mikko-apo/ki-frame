@@ -50,7 +50,7 @@ function demolist(demos: Demo[]) {
       if (searchString.length > 2) {
         rows[index].hidden = demoFn.indexOf(searchString) === -1;
       }
-      if (searchString.length == 0) {
+      if (searchString.length === 0) {
         rows[index].hidden = false;
       }
     });

@@ -1,4 +1,3 @@
-"use strict";
 (() => {
   // src/util/objectIdCounter.ts
   var runningId = 0;
@@ -124,8 +123,7 @@
 
   // src/promiseDestroy.ts
   var PromiseDestroy = class _PromiseDestroy {
-    constructor(promise, destroy = () => {
-    }) {
+    constructor(promise, destroy = () => {}) {
       this.promise = promise;
       this.destroy = destroy;
     }
@@ -185,7 +183,11 @@
 
   // src/util/setByPath.ts
   function copyAndSet(obj, path, value) {
-    const segments = Array.isArray(path) ? path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2) : path === "" ? [] : path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
+    const segments = Array.isArray(path)
+      ? path.map((p2) => (typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2))
+      : path === ""
+        ? []
+        : path.split(".").map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
     if (segments.length === 0) return value;
     const parents = [];
     let cur = obj;
@@ -301,6 +303,9 @@
   function isDefined(item) {
     return item !== void 0 && item !== null;
   }
+  function typedEntries(obj) {
+    return Object.entries(obj);
+  }
 
   // src/state.ts
   function shallowEqual(a2, b2) {
@@ -361,7 +366,7 @@
     }
     describe() {
       return {
-        name: this.stateId
+        name: this.stateId,
       };
     }
     updateUi() {
@@ -374,25 +379,23 @@
       return this.getOutputChannel().subscribe(cb);
     }
     addLinkedState(controller, options) {
-      this.linkedStates.add({ controller, ...options || {} });
+      this.linkedStates.add({ controller, ...(options || {}) });
     }
     onDestroy(target) {
       if (typeof target === "function") {
         if (this.destroyed) {
           target();
-          return () => {
-          };
+          return () => {};
         }
         const info = {
           type: "function",
-          destroy: target
+          destroy: target,
         };
         return this.onDestroyListeners.add(info);
       } else {
         if (this.destroyed) {
           target.destroy();
-          return () => {
-          };
+          return () => {};
         }
         return this.onDestroyListeners.add(target);
       }
@@ -407,7 +410,10 @@
       if (this.destroyed) return;
       this._destroyed = true;
       for (const linkedState of Array.from(this.linkedStates)) {
-        if (!isDefined((_a2 = linkedState == null ? void 0 : linkedState.events) == null ? void 0 : _a2.destroy) || linkedState.events.destroy) {
+        if (
+          !isDefined((_a2 = linkedState == null ? void 0 : linkedState.events) == null ? void 0 : _a2.destroy) ||
+          linkedState.events.destroy
+        ) {
           linkedState.controller.destroy();
         }
       }
@@ -435,14 +441,14 @@
           name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
           type: "dom",
           source: new WeakRef(node),
-          weakRefUnsub: new WeakRef(unsub)
+          weakRefUnsub: new WeakRef(unsub),
         });
       } else {
         this.eventSources.push({
           name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
           type: "dom",
           source: new WeakRef(node),
-          unsub
+          unsub,
         });
       }
       return unsub;
@@ -452,7 +458,7 @@
         new TimeoutDestroyable(() => {
           unregisterDestroyableAndCallItsDestroy();
           fn();
-        }, at)
+        }, at),
       );
       return unregisterDestroyableAndCallItsDestroy;
     }
@@ -468,20 +474,24 @@
         const timeoutUnsub = this.timeout(destroyAbortController2, timeoutMs);
         return [abortController2, destroyAbortController2];
       };
-      const [abortController, destroyAbortController] = isDefined(timeoutMs) ? createAbortController(() => unregisterDestroyableAndCallItsDestroy()) : [];
+      const [abortController, destroyAbortController] = isDefined(timeoutMs)
+        ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
+        : [];
       const response = fetch(url, { ...fetchInit, signal: abortController == null ? void 0 : abortController.signal });
-      const maybeOkResponse = assertOk ? response.then((response2) => {
-        if (typeof assertOk === "function" && assertOk(response2) === false || !response2.ok) {
-          const cause = { errorResponse: response2 };
-          throw cause;
-        }
-        return response2;
-      }) : response;
+      const maybeOkResponse = assertOk
+        ? response.then((response2) => {
+            if ((typeof assertOk === "function" && assertOk(response2) === false) || !response2.ok) {
+              const cause = { errorResponse: response2 };
+              throw cause;
+            }
+            return response2;
+          })
+        : response;
       const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
         new FetchDestroyable(url, timeoutMs, maybeOkResponse, () => {
           unregisterDestroyableAndCallItsDestroy();
           destroyAbortController == null ? void 0 : destroyAbortController();
-        })
+        }),
       );
       maybeOkResponse.finally(unregisterDestroyableAndCallItsDestroy);
       if (map2) {
@@ -509,16 +519,19 @@
       return this.onChange;
     }
     set(newObj) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set value"));
+      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
       const old = this.value;
-      if (shallowEqual(old, newObj)) return;
-      this.value = newObj;
-      this.getOnChange().publish(newObj, old);
+      const finalObj = typeof newObj === "function" ? newObj(this.value) : newObj;
+      if (shallowEqual(old, finalObj)) return;
+      this.value = finalObj;
+      this.getOnChange().publish(finalObj, old);
     }
-    modify(fn) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot modify"));
-      const next = fn(this.value);
-      this.set(next);
+    update(update) {
+      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
+      if (typeof this.value !== "object") {
+      }
+      const finalUpdate = typeof update === "function" ? update(this.value) : update;
+      this.set({ ...this.value, ...finalUpdate });
     }
     onValueChange(cb) {
       if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
@@ -569,7 +582,7 @@
           ev.preventDefault();
           listener(ev);
         },
-        options
+        options,
       );
     }
   };
@@ -581,6 +594,106 @@
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
 
+  // src/domBuilderStyles.ts
+  function styles(...inputs) {
+    const flat = {};
+    for (const input2 of Array.from(inputs).flat()) {
+      if (input2 instanceof Styles) {
+        Object.assign(flat, input2.styles);
+      } else {
+        Object.assign(flat, input2);
+      }
+    }
+    return new Styles(flat);
+  }
+  var Styles = class {
+    constructor(styles2) {
+      this.styles = styles2;
+    }
+  };
+  var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
+    // common layout/size props
+    "width",
+    "height",
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "minWidth",
+    "minHeight",
+    "maxWidth",
+    "maxHeight",
+    "margin",
+    "marginTop",
+    "marginBottom",
+    "marginLeft",
+    "marginRight",
+    "padding",
+    "paddingTop",
+    "paddingBottom",
+    "paddingLeft",
+    "paddingRight",
+    "gap",
+    "rowGap",
+    "columnGap",
+    "fontSize",
+    "borderWidth",
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+    "borderRadius",
+    "outlineWidth",
+    "letterSpacing",
+    "lineHeight",
+  ]);
+  function convertPrimitiveValue(prop, val) {
+    if (val === null || val === void 0) return "";
+    if (typeof val === "number") {
+      if (prop.startsWith("--")) return String(val);
+      if (UNIT_PX_PROPS.has(prop)) return `${val}px`;
+      return String(val);
+    }
+    return String(val);
+  }
+  function convertArrayValue(prop, arr) {
+    const flat = [];
+    for (const v of arr) {
+      if (Array.isArray(v)) {
+        for (const vv of v) flat.push(vv);
+      } else {
+        flat.push(v);
+      }
+    }
+    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
+    return parts.join(", ");
+  }
+  function applyCss(el, style2) {
+    for (const key in style2) {
+      if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
+      const raw = style2[key];
+      if (isDefined(raw)) {
+        if (key.startsWith("--")) {
+          if (Array.isArray(raw)) {
+            const val = convertArrayValue(key, raw);
+            el.style.setProperty(key, val);
+          } else {
+            const val = convertPrimitiveValue(key, raw);
+            el.style.setProperty(key, val);
+          }
+          continue;
+        }
+        let finalValue;
+        if (Array.isArray(raw)) {
+          finalValue = convertArrayValue(key, raw);
+        } else {
+          finalValue = convertPrimitiveValue(key, raw);
+        }
+        el.style[key] = finalValue;
+      }
+    }
+  }
+
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
@@ -591,6 +704,34 @@
     }
   };
 
+  // src/domBuilderEvents.ts
+  var Events = class {
+    constructor(events2) {
+      this.events = events2;
+    }
+  };
+  function events(...inputs) {
+    const out = {};
+    const visit = (input2) => {
+      if (Array.isArray(input2)) {
+        for (const i2 of input2) visit(i2);
+      } else if (input2 instanceof Events || "events" in input2) {
+        Object.assign(out, input2.events);
+      } else {
+        Object.assign(out, input2);
+      }
+    };
+    for (const input2 of inputs) visit(input2);
+    return new Events(out);
+  }
+  function applyEvents(node, arg) {
+    typedEntries(arg.events).forEach(([key, fn]) => {
+      node.addEventListener(key, (event) => {
+        fn({ node, event });
+      });
+    });
+  }
+
   // src/domBuilder.ts
   function addItems(element, ...args) {
     args.forEach((arg) => {
@@ -600,12 +741,25 @@
         element.appendChild(arg);
       } else if (arg instanceof WrappedNode) {
         element.appendChild(arg.node);
+      } else if (arg instanceof Styles) {
+        applyCss(element, arg.styles);
+      } else if (arg instanceof Events) {
+        applyEvents(element, arg);
       } else if (typeof arg === "string") {
         element.appendChild(getDocument().createTextNode(arg));
       } else if (typeof arg === "object") {
-        Object.keys(arg).forEach((key) => {
-          const argValue = arg[key];
-          if (key.startsWith("on") && typeof argValue === "function") {
+        Object.entries(arg).forEach(([key, argValue]) => {
+          if (key === "class") {
+            if (Array.isArray(argValue)) {
+              element.classList.add(...argValue);
+            } else {
+              element.classList.add(argValue);
+            }
+          } else if (key === "styles") {
+            applyCss(element, arg.styles);
+          } else if (key === "events") {
+            applyEvents(element, events(arg));
+          } else if (key.startsWith("on") && typeof argValue === "function") {
             const event = key.substring(2).toLowerCase();
             element.addEventListener(event, argValue);
           } else {
@@ -625,12 +779,15 @@
     }
     throw new Error("document is undefined");
   }
-  function createElement(tagNameOrElement, ...args) {
-    const element = getDocument().createElement(tagNameOrElement);
+  function createElement(tagName, ...args) {
+    const element = getDocument().createElement(tagName);
     addItems(element, ...args);
     return element;
   }
-  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
+  var createElementFn =
+    (tagName) =>
+    (...args) =>
+      createElement(tagName, ...args);
   var a = createElementFn("a");
   var abbr = createElementFn("abbr");
   var address = createElementFn("address");
@@ -755,21 +912,41 @@
 
   // src/demos/01_domBuilderStateDemo.ts
   function domBuilderWithState() {
-    const createNodes = () => {
+    const createNodes = (state) => {
       const info = text();
-      const root = p("Click to update counter", info);
-      return { info, root };
+      const root = p(
+        "Click this text to update counter",
+        {
+          styles: {
+            color: "red",
+          },
+          events: {
+            click() {
+              state.set((cur) => ({ total: cur.total + 1 }));
+            },
+          },
+        },
+        div(info, styles({ color: "green" })),
+      );
+      state.onValueChange((obj) => {
+        info.nodeValue = `Counter: ${obj.total}`;
+      });
+      return root;
     };
     function counter(state = createState({ total: 0 })) {
-      const nodes = createNodes();
-      state.addDomEvent("counter", nodes.root, "click", (ev) => state.modify((cur) => ({ total: cur.total + 1 })));
-      state.onValueChange((obj) => {
-        nodes.info.nodeValue = `Counter: ${obj.total}`;
-      });
+      const root = createNodes(state);
+      const reset = button(
+        "Reset",
+        events({
+          click() {
+            state.set({ total: 0 });
+          },
+        }),
+      );
       state.updateUi();
-      return nodes;
+      return div(root, reset);
     }
-    return counter().root;
+    return counter();
   }
 
   // src/fetch.ts
@@ -782,10 +959,13 @@
     const info = text("Not loaded");
     const b2 = button("Click me to fetch!");
     let counter = 0;
-    const setText = (s2) => info.nodeValue = s2;
-    const handleError = (reason) => setText(
-      isErrorResponse(reason) ? `There was an error, response.status is ${reason.errorResponse.status}` : `There was an error, response.status is ${reason}`
-    );
+    const setText = (s2) => (info.nodeValue = s2);
+    const handleError = (reason) =>
+      setText(
+        isErrorResponse(reason)
+          ? `There was an error, response.status is ${reason.errorResponse.status}`
+          : `There was an error, response.status is ${reason}`,
+      );
     const state = createController();
     state.addDomEvent("start fetch", b2, "click", () => {
       counter++;
@@ -801,7 +981,8 @@
     const i2 = input();
     const info = pre();
     const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
-    const log = (s2) => info.append(`${s2}
+    const log = (s2) =>
+      info.append(`${s2}
 `);
     const isDividable = (prefix, divider) => {
       return (n) => {
@@ -816,7 +997,7 @@
     const formData = createForm(
       {
         a: formEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
-        b: formEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5))
+        b: formEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5)),
       },
       init,
       {
@@ -828,13 +1009,13 @@
           }
           log(`Form full state validation : ${a2} + ${b2}=${a2 + b2} is not 15`);
           return false;
-        }
-      }
+        },
+      },
     );
     formData.onValueChange(({ a: a2, b: b2 }) => {
       log(`Form data set to: a:${a2} b:${b2}`);
     });
-    formData.onsubmit(root, (ev) => {
+    formData.onsubmit(root, () => {
       const { a: a2, b: b2 } = formData.get();
       log(`Form submitted ${a2} ${b2}`);
     });
@@ -859,9 +1040,9 @@
     const t1 = text("T1");
     const root = p(
       p("Click me to send message!", {
-        onclick: () => channel.publish({ num: num++ })
+        onclick: () => channel.publish({ num: num++ }),
       }),
-      t1
+      t1,
     );
     return root;
   }
@@ -871,25 +1052,26 @@
     const state = createState({ total: 0 });
     function infoText(state2) {
       const t = text();
-      state2.onValueChange((obj) => t.nodeValue = `${obj.total}`);
+      state2.onValueChange((obj) => (t.nodeValue = `${obj.total}`));
       return t;
     }
     state.updateUi();
     return p("Total: ", infoText(state), {
-      onclick: () => state.modify((cur) => ({ total: cur.total + 1 }))
+      onclick: () => state.set((cur) => ({ total: cur.total + 1 })),
     });
   }
 
   // src/demos/simpleFormDemo.ts
   function simpleForm() {
-    const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", (ev) => {
-      if (validate) {
-        if (validate(node.value)) {
-          return;
+    const domTextInput = (state, name, node, key, validate) =>
+      state.addDomEvent(name, node, "keyup", () => {
+        if (validate) {
+          if (validate(node.value)) {
+            return;
+          }
         }
-      }
-      state.modify((cur) => ({ ...cur, [key]: node.value }));
-    });
+        state.set((cur) => ({ ...cur, [key]: node.value }));
+      });
     function simpleForm2(formData = createState({ a: "23", b: "234" })) {
       const i1 = input();
       const i2 = input();
@@ -906,7 +1088,7 @@
         "i2",
         i2,
         "b",
-        (v) => v.length % 2 == 0 && log(`b value '${v}' has wrong length ${v.length}`)
+        (v) => v.length % 2 === 0 && log(`b value '${v}' has wrong length ${v.length}`),
       );
       formData.onValueChange(({ a: a2, b: b2 }) => {
         i1.value = a2;
@@ -930,8 +1112,10 @@
     const state = createState({ total: 123 });
     const info = (txt, s2) => {
       const t = text();
-      s2.onValueChange((obj) => t.nodeValue = `${txt}: ${obj.total}`);
-      s2.onDestroy(() => t.nodeValue = `${txt}: state destroyed`);
+      s2.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`));
+      s2.onDestroy(() => {
+        t.nodeValue = `${txt}: state destroyed`;
+      });
       return p(t);
     };
     const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
@@ -960,9 +1144,9 @@
   function stateTimeoutDemo() {
     const b1 = button("Click me!");
     const state = createController();
-    state.addDomEvent("start timeout", b1, "click", (ev) => {
+    state.addDomEvent("start timeout", b1, "click", () => {
       b1.textContent = "Waiting...";
-      state.timeout(() => b1.textContent = "Ready!", 1e3);
+      state.timeout(() => (b1.textContent = "Ready!"), 1e3);
     });
     return div(b1);
   }
@@ -978,7 +1162,7 @@
     demo("onDestroyParentDemo", onDestroyParentDemo),
     demo("channelsDemo", channelsDemo),
     demo("simple form - form handling with state", simpleForm),
-    demo("timeout example", stateTimeoutDemo)
+    demo("timeout example", stateTimeoutDemo),
   ];
   function demolist(demos2) {
     const demoRowFunctionStringSearchIndex = demos2.map((demo2) => demo2.fn.toString().toLowerCase());
@@ -989,7 +1173,7 @@
         onclick: () => {
           target.replaceChildren(demo2.fn());
           src.replaceChildren(pre(demo2.fn.toString()));
-        }
+        },
       });
       const row = tr(td(launchDemo, br(), demo2.title), target, src);
       row.style = "vertical-align: baseline";
@@ -1001,7 +1185,7 @@
         if (searchString.length > 2) {
           rows[index].hidden = demoFn.indexOf(searchString) === -1;
         }
-        if (searchString.length == 0) {
+        if (searchString.length === 0) {
           rows[index].hidden = false;
         }
       });
@@ -1025,12 +1209,12 @@
             const original = Array.from(getDefaultContext().controllers.all()).length;
             window.gc();
             console.log(
-              `Ran window.gc(). Controller count before ${original} after ${Array.from(getDefaultContext().controllers.all()).length}`
+              `Ran window.gc(). Controller count before ${original} after ${Array.from(getDefaultContext().controllers.all()).length}`,
             );
           }
           console.log(getDefaultContext());
-        }
-      })
+        },
+      }),
     );
   }
   setElementToId("app", demolist(demos));

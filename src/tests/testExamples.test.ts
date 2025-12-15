@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createState } from "..";
 import { p, text } from "../domBuilder";
-import { createState } from "../state";
 import { setJsdomApp } from "./testUtil";
 
 // DOM structure setup for testing
@@ -13,7 +13,7 @@ const createNodes = () => {
 function counter(state = createState({ total: 0 })) {
   const nodes = createNodes();
   // connect subscribers
-  nodes.root.onclick = () => state.modify((cur) => ({ total: cur.total + 1 }));
+  nodes.root.onclick = () => state.set((cur) => ({ total: cur.total + 1 }));
   state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
   // render content with state.refresh()
   state.updateUi();

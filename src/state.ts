@@ -193,7 +193,7 @@ export class Controller extends Context {
     name: string,
     node: Node,
     type: K,
-    listener: (ev: HTMLElementEventMap[K]) => void | EventListenerObject | null,
+    listener: ((ev: HTMLElementEventMap[K]) => void) | EventListenerObject | null,
     options?: boolean | AddEventListenerOptions,
   ): Unsub {
     node.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options);
@@ -302,18 +302,22 @@ export class State<Value> extends Controller {
     return this.onChange;
   }
 
-  set(newObj: Value) {
-    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set value"));
+  set(newObj: Value | ((cur: Value) => Value)) {
+    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
     const old = this.value;
-    if (shallowEqual(old, newObj)) return;
-    this.value = newObj;
-    this.getOnChange().publish(newObj, old);
+    const finalObj: Value = typeof newObj === "function" ? (newObj as (cur: Value) => Value)(this.value) : newObj;
+    if (shallowEqual(old, finalObj)) return;
+    this.value = finalObj;
+    this.getOnChange().publish(finalObj, old);
   }
 
-  modify(fn: (cur: Value) => Value) {
-    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot modify"));
-    const next = fn(this.value);
-    this.set(next);
+  update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>)) {
+    if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
+    if (typeof this.value !== "object") {
+    }
+    const finalUpdate =
+      typeof update === "function" ? (update as (cur: Value) => Value | Partial<Value>)(this.value) : update;
+    this.set({ ...this.value, ...finalUpdate });
   }
 
   onValueChange(cb: (obj: Value, old: Value) => void): Unsub {

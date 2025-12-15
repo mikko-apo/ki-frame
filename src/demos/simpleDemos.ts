@@ -18,6 +18,6 @@ export function basicCounter() {
   // renders initial content by triggering state.onChange() subscribers
   state.updateUi();
   return p("Total: ", infoText(state), {
-    onclick: () => state.modify((cur) => ({ total: cur.total + 1 })),
+    onclick: () => state.set((cur) => ({ total: cur.total + 1 })),
   });
 }

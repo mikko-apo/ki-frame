@@ -1,10 +1,27 @@
+import { applyEvents, Events, type EventsInput, events } from "./domBuilderEvents";
+import { applyCss, type StyleObject, Styles } from "./domBuilderStyles";
 import { WrappedNode } from "./types";
 
-type CreateElementTypes = HTMLElement | Text | string | WrappedNode;
-type CreateElementArg<N extends Node> = CreateElementTypes | Array<CreateElementTypes> | Partial<N>;
-export type CreateElementArgs<N extends Node> = CreateElementArg<N>[];
+type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
+  | HTMLElement
+  | Text
+  | string
+  | WrappedNode
+  | Styles
+  | Events<K>;
+type CreateElementArg<K extends keyof HTMLElementTagNameMap> =
+  | CreateElementTypes<K>
+  | CreateElementTypes<K>[]
+  | Partial<
+      HTMLElementTagNameMap[K] & {
+        class: string | string[];
+        styles: StyleObject;
+        events: EventsInput<K>;
+      }
+    >;
+export type CreateElementArgs<K extends keyof HTMLElementTagNameMap> = CreateElementArg<K>[];
 
-function addItems<N extends Node>(element: HTMLElement, ...args: CreateElementArgs<N>) {
+function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, ...args: CreateElementArgs<K>) {
   args.forEach((arg) => {
     if (Array.isArray(arg)) {
       addItems(element, ...arg);
@@ -12,12 +29,25 @@ function addItems<N extends Node>(element: HTMLElement, ...args: CreateElementAr
       element.appendChild(arg);
     } else if (arg instanceof WrappedNode) {
       element.appendChild(arg.node);
+    } else if (arg instanceof Styles) {
+      applyCss(element, arg.styles);
+    } else if (arg instanceof Events) {
+      applyEvents(element as any, arg);
     } else if (typeof arg === "string") {
       element.appendChild(getDocument().createTextNode(arg));
     } else if (typeof arg === "object") {
-      Object.keys(arg).forEach((key) => {
-        const argValue = (arg as any)[key];
-        if (key.startsWith("on") && typeof argValue === "function") {
+      Object.entries(arg).forEach(([key, argValue]) => {
+        if (key === "class") {
+          if (Array.isArray(argValue)) {
+            element.classList.add(...argValue);
+          } else {
+            element.classList.add(argValue);
+          }
+        } else if (key === "styles") {
+          applyCss(element, arg.styles as any);
+        } else if (key === "events") {
+          applyEvents(element as any, events(arg as any));
+        } else if (key.startsWith("on") && typeof argValue === "function") {
           const event = key.substring(2).toLowerCase();
           element.addEventListener(event, argValue);
         } else {
@@ -45,132 +75,132 @@ function getDocument() {
   throw new Error("document is undefined");
 }
 
-function createElement<E extends HTMLElement>(
-  tagNameOrElement: keyof HTMLElementTagNameMap,
-  ...args: CreateElementArgs<E>
-): E {
-  const element = getDocument().createElement(tagNameOrElement);
-  addItems<E>(element, ...args);
-  return element as E;
+function createElement<K extends keyof HTMLElementTagNameMap>(
+  tagName: keyof HTMLElementTagNameMap,
+  ...args: CreateElementArgs<K>
+): HTMLElementTagNameMap[K] {
+  const element = getDocument().createElement(tagName);
+  addItems(element, ...args);
+  return element as HTMLElementTagNameMap[K];
 }
 
 const createElementFn =
-  <E extends HTMLElement>(tagName: keyof HTMLElementTagNameMap) =>
-  (...args: CreateElementArgs<E>) =>
-    createElement<E>(tagName, ...args);
+  <K extends keyof HTMLElementTagNameMap>(tagName: K) =>
+  (...args: CreateElementArgs<K>) =>
+    createElement(tagName, ...args);
 
-export const a = createElementFn<HTMLAnchorElement>("a");
-export const abbr = createElementFn<HTMLElement>("abbr");
-export const address = createElementFn<HTMLElement>("address");
-export const area = createElementFn<HTMLAreaElement>("area");
-export const article = createElementFn<HTMLElement>("article");
-export const aside = createElementFn<HTMLElement>("aside");
-export const audio = createElementFn<HTMLAudioElement>("audio");
-export const b = createElementFn<HTMLElement>("b");
-export const base = createElementFn<HTMLBaseElement>("base");
-export const bdi = createElementFn<HTMLElement>("bdi");
-export const bdo = createElementFn<HTMLElement>("bdo");
-export const blockquote = createElementFn<HTMLQuoteElement>("blockquote");
-export const body = createElementFn<HTMLBodyElement>("body");
-export const br = createElementFn<HTMLBRElement>("br");
-export const button = createElementFn<HTMLButtonElement>("button");
-export const canvas = createElementFn<HTMLCanvasElement>("canvas");
-export const caption = createElementFn<HTMLTableCaptionElement>("caption");
-export const cite = createElementFn<HTMLElement>("cite");
-export const code = createElementFn<HTMLElement>("code");
-export const col = createElementFn<HTMLTableColElement>("col");
-export const colgroup = createElementFn<HTMLTableColElement>("colgroup");
-export const data = createElementFn<HTMLDataElement>("data");
-export const datalist = createElementFn<HTMLDataListElement>("datalist");
-export const dd = createElementFn<HTMLElement>("dd");
-export const del = createElementFn<HTMLModElement>("del");
-export const details = createElementFn<HTMLDetailsElement>("details");
-export const dfn = createElementFn<HTMLElement>("dfn");
-export const dialog = createElementFn<HTMLDialogElement>("dialog");
-export const div = createElementFn<HTMLDivElement>("div");
-export const dl = createElementFn<HTMLDListElement>("dl");
-export const dt = createElementFn<HTMLElement>("dt");
-export const em = createElementFn<HTMLElement>("em");
-export const embed = createElementFn<HTMLEmbedElement>("embed");
-export const fieldset = createElementFn<HTMLFieldSetElement>("fieldset");
-export const figcaption = createElementFn<HTMLElement>("figcaption");
-export const figure = createElementFn<HTMLElement>("figure");
-export const footer = createElementFn<HTMLElement>("footer");
-export const form = createElementFn<HTMLFormElement>("form");
-export const h1 = createElementFn<HTMLHeadingElement>("h1");
-export const h2 = createElementFn<HTMLHeadingElement>("h2");
-export const h3 = createElementFn<HTMLHeadingElement>("h3");
-export const h4 = createElementFn<HTMLHeadingElement>("h4");
-export const h5 = createElementFn<HTMLHeadingElement>("h5");
-export const h6 = createElementFn<HTMLHeadingElement>("h6");
-export const head = createElementFn<HTMLHeadElement>("head");
-export const header = createElementFn<HTMLElement>("header");
-export const hgroup = createElementFn<HTMLElement>("hgroup");
-export const hr = createElementFn<HTMLHRElement>("hr");
-export const html = createElementFn<HTMLHtmlElement>("html");
-export const i = createElementFn<HTMLElement>("i");
-export const iframe = createElementFn<HTMLIFrameElement>("iframe");
-export const img = createElementFn<HTMLImageElement>("img");
-export const input = createElementFn<HTMLInputElement>("input");
-export const ins = createElementFn<HTMLModElement>("ins");
-export const kbd = createElementFn<HTMLElement>("kbd");
-export const label = createElementFn<HTMLLabelElement>("label");
-export const legend = createElementFn<HTMLLegendElement>("legend");
-export const li = createElementFn<HTMLLIElement>("li");
-export const link = createElementFn<HTMLLinkElement>("link");
-export const main = createElementFn<HTMLElement>("main");
-export const map = createElementFn<HTMLMapElement>("map");
-export const mark = createElementFn<HTMLElement>("mark");
-export const menu = createElementFn<HTMLMenuElement>("menu");
-export const meta = createElementFn<HTMLMetaElement>("meta");
-export const meter = createElementFn<HTMLMeterElement>("meter");
-export const nav = createElementFn<HTMLElement>("nav");
-export const noscript = createElementFn<HTMLElement>("noscript");
-export const object = createElementFn<HTMLObjectElement>("object");
-export const ol = createElementFn<HTMLOListElement>("ol");
-export const optgroup = createElementFn<HTMLOptGroupElement>("optgroup");
-export const option = createElementFn<HTMLOptionElement>("option");
-export const output = createElementFn<HTMLOutputElement>("output");
-export const p = createElementFn<HTMLParagraphElement>("p");
-export const picture = createElementFn<HTMLPictureElement>("picture");
-export const pre = createElementFn<HTMLPreElement>("pre");
-export const progress = createElementFn<HTMLProgressElement>("progress");
-export const q = createElementFn<HTMLQuoteElement>("q");
-export const rp = createElementFn<HTMLElement>("rp");
-export const rt = createElementFn<HTMLElement>("rt");
-export const ruby = createElementFn<HTMLElement>("ruby");
-export const s = createElementFn<HTMLElement>("s");
-export const samp = createElementFn<HTMLElement>("samp");
-export const script = createElementFn<HTMLScriptElement>("script");
-export const search = createElementFn<HTMLElement>("search");
-export const section = createElementFn<HTMLElement>("section");
-export const select = createElementFn<HTMLSelectElement>("select");
-export const slot = createElementFn<HTMLSlotElement>("slot");
-export const small = createElementFn<HTMLElement>("small");
-export const source = createElementFn<HTMLSourceElement>("source");
-export const span = createElementFn<HTMLSpanElement>("span");
-export const strong = createElementFn<HTMLElement>("strong");
-export const style = createElementFn<HTMLStyleElement>("style");
-export const sub = createElementFn<HTMLElement>("sub");
-export const summary = createElementFn<HTMLElement>("summary");
-export const sup = createElementFn<HTMLElement>("sup");
-export const table = createElementFn<HTMLTableElement>("table");
-export const tbody = createElementFn<HTMLTableSectionElement>("tbody");
-export const td = createElementFn<HTMLTableCellElement>("td");
-export const template = createElementFn<HTMLTemplateElement>("template");
-export const textarea = createElementFn<HTMLTextAreaElement>("textarea");
-export const tfoot = createElementFn<HTMLTableSectionElement>("tfoot");
-export const th = createElementFn<HTMLTableCellElement>("th");
-export const thead = createElementFn<HTMLTableSectionElement>("thead");
-export const time = createElementFn<HTMLTimeElement>("time");
-export const title = createElementFn<HTMLTitleElement>("title");
-export const tr = createElementFn<HTMLTableRowElement>("tr");
-export const track = createElementFn<HTMLTrackElement>("track");
-export const u = createElementFn<HTMLElement>("u");
-export const ul = createElementFn<HTMLUListElement>("ul");
-export const varE = createElementFn<HTMLElement>("var");
-export const video = createElementFn<HTMLVideoElement>("video");
-export const wbr = createElementFn<HTMLElement>("wbr");
+export const a = createElementFn("a");
+export const abbr = createElementFn("abbr");
+export const address = createElementFn("address");
+export const area = createElementFn("area");
+export const article = createElementFn("article");
+export const aside = createElementFn("aside");
+export const audio = createElementFn("audio");
+export const b = createElementFn("b");
+export const base = createElementFn("base");
+export const bdi = createElementFn("bdi");
+export const bdo = createElementFn("bdo");
+export const blockquote = createElementFn("blockquote");
+export const body = createElementFn("body");
+export const br = createElementFn("br");
+export const button = createElementFn("button");
+export const canvas = createElementFn("canvas");
+export const caption = createElementFn("caption");
+export const cite = createElementFn("cite");
+export const code = createElementFn("code");
+export const col = createElementFn("col");
+export const colgroup = createElementFn("colgroup");
+export const data = createElementFn("data");
+export const datalist = createElementFn("datalist");
+export const dd = createElementFn("dd");
+export const del = createElementFn("del");
+export const details = createElementFn("details");
+export const dfn = createElementFn("dfn");
+export const dialog = createElementFn("dialog");
+export const div = createElementFn("div");
+export const dl = createElementFn("dl");
+export const dt = createElementFn("dt");
+export const em = createElementFn("em");
+export const embed = createElementFn("embed");
+export const fieldset = createElementFn("fieldset");
+export const figcaption = createElementFn("figcaption");
+export const figure = createElementFn("figure");
+export const footer = createElementFn("footer");
+export const form = createElementFn("form");
+export const h1 = createElementFn("h1");
+export const h2 = createElementFn("h2");
+export const h3 = createElementFn("h3");
+export const h4 = createElementFn("h4");
+export const h5 = createElementFn("h5");
+export const h6 = createElementFn("h6");
+export const head = createElementFn("head");
+export const header = createElementFn("header");
+export const hgroup = createElementFn("hgroup");
+export const hr = createElementFn("hr");
+export const html = createElementFn("html");
+export const i = createElementFn("i");
+export const iframe = createElementFn("iframe");
+export const img = createElementFn("img");
+export const input = createElementFn("input");
+export const ins = createElementFn("ins");
+export const kbd = createElementFn("kbd");
+export const label = createElementFn("label");
+export const legend = createElementFn("legend");
+export const li = createElementFn("li");
+export const link = createElementFn("link");
+export const main = createElementFn("main");
+export const map = createElementFn("map");
+export const mark = createElementFn("mark");
+export const menu = createElementFn("menu");
+export const meta = createElementFn("meta");
+export const meter = createElementFn("meter");
+export const nav = createElementFn("nav");
+export const noscript = createElementFn("noscript");
+export const object = createElementFn("object");
+export const ol = createElementFn("ol");
+export const optgroup = createElementFn("optgroup");
+export const option = createElementFn("option");
+export const output = createElementFn("output");
+export const p = createElementFn("p");
+export const picture = createElementFn("picture");
+export const pre = createElementFn("pre");
+export const progress = createElementFn("progress");
+export const q = createElementFn("q");
+export const rp = createElementFn("rp");
+export const rt = createElementFn("rt");
+export const ruby = createElementFn("ruby");
+export const s = createElementFn("s");
+export const samp = createElementFn("samp");
+export const script = createElementFn("script");
+export const search = createElementFn("search");
+export const section = createElementFn("section");
+export const select = createElementFn("select");
+export const slot = createElementFn("slot");
+export const small = createElementFn("small");
+export const source = createElementFn("source");
+export const span = createElementFn("span");
+export const strong = createElementFn("strong");
+export const style = createElementFn("style");
+export const sub = createElementFn("sub");
+export const summary = createElementFn("summary");
+export const sup = createElementFn("sup");
+export const table = createElementFn("table");
+export const tbody = createElementFn("tbody");
+export const td = createElementFn("td");
+export const template = createElementFn("template");
+export const textarea = createElementFn("textarea");
+export const tfoot = createElementFn("tfoot");
+export const th = createElementFn("th");
+export const thead = createElementFn("thead");
+export const time = createElementFn("time");
+export const title = createElementFn("title");
+export const tr = createElementFn("tr");
+export const track = createElementFn("track");
+export const u = createElementFn("u");
+export const ul = createElementFn("ul");
+export const varE = createElementFn("var");
+export const video = createElementFn("video");
+export const wbr = createElementFn("wbr");
 
 // Other Nodes
 
