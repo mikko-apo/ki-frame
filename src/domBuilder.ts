@@ -1,9 +1,9 @@
-import {applyCss, Styles, StyleObject} from "./domBuilderStyles";
-import {WrappedNode} from "./types";
-import {applyEvents, Events, events, EventsInput} from "./domBuilderEvents";
+import { applyEvents, Events, type EventsInput, events } from "./domBuilderEvents";
+import { applyCss, type StyleObject, Styles } from "./domBuilderStyles";
+import { WrappedNode } from "./types";
 
 type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
-  HTMLElement
+  | HTMLElement
   | Text
   | string
   | WrappedNode
@@ -12,11 +12,13 @@ type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
 type CreateElementArg<K extends keyof HTMLElementTagNameMap> =
   | CreateElementTypes<K>
   | CreateElementTypes<K>[]
-  | Partial<HTMLElementTagNameMap[K] & {
-  class: string | string[],
-  styles: StyleObject,
-  events: EventsInput<K>
-}>;
+  | Partial<
+      HTMLElementTagNameMap[K] & {
+        class: string | string[];
+        styles: StyleObject;
+        events: EventsInput<K>;
+      }
+    >;
 export type CreateElementArgs<K extends keyof HTMLElementTagNameMap> = CreateElementArg<K>[];
 
 function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, ...args: CreateElementArgs<K>) {
@@ -30,7 +32,7 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
     } else if (arg instanceof Styles) {
       applyCss(element, arg.styles);
     } else if (arg instanceof Events) {
-      applyEvents(element as any, arg)
+      applyEvents(element as any, arg);
     } else if (typeof arg === "string") {
       element.appendChild(getDocument().createTextNode(arg));
     } else if (typeof arg === "object") {
@@ -41,10 +43,10 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
           } else {
             element.classList.add(argValue);
           }
-        } else if(key === "styles") {
+        } else if (key === "styles") {
           applyCss(element, arg.styles as any);
-        } else if(key === "events") {
-          applyEvents(element as any, events(arg as any))
+        } else if (key === "events") {
+          applyEvents(element as any, events(arg as any));
         } else if (key.startsWith("on") && typeof argValue === "function") {
           const event = key.substring(2).toLowerCase();
           element.addEventListener(event, argValue);
@@ -84,8 +86,8 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 const createElementFn =
   <K extends keyof HTMLElementTagNameMap>(tagName: K) =>
-    (...args: CreateElementArgs<K>) =>
-      createElement(tagName, ...args);
+  (...args: CreateElementArgs<K>) =>
+    createElement(tagName, ...args);
 
 export const a = createElementFn("a");
 export const abbr = createElementFn("abbr");
@@ -199,7 +201,6 @@ export const ul = createElementFn("ul");
 export const varE = createElementFn("var");
 export const video = createElementFn("video");
 export const wbr = createElementFn("wbr");
-
 
 // Other Nodes
 

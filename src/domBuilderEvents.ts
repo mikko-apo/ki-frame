@@ -1,15 +1,16 @@
-import {typedEntries} from "./util/typeUtils";
+import { typedEntries } from "./util/typeUtils";
 
-type EventHandler<TagName extends keyof HTMLElementTagNameMap, EventName extends keyof HTMLElementEventMap> =
-  (params: { node: HTMLElementTagNameMap[TagName], event: HTMLElementEventMap[EventName] }) => void;
+type EventHandler<TagName extends keyof HTMLElementTagNameMap, EventName extends keyof HTMLElementEventMap> = (params: {
+  node: HTMLElementTagNameMap[TagName];
+  event: HTMLElementEventMap[EventName];
+}) => void;
 
 type EventObject<TagName extends keyof HTMLElementTagNameMap> = {
   [EventName in keyof HTMLElementEventMap]?: EventHandler<TagName, EventName>;
 };
 
 export class Events<TagName extends keyof HTMLElementTagNameMap> {
-  constructor(public readonly events: EventObject<TagName>) {
-  }
+  constructor(public readonly events: EventObject<TagName>) {}
 }
 
 export type EventsInput<TagName extends keyof HTMLElementTagNameMap> =
@@ -18,7 +19,9 @@ export type EventsInput<TagName extends keyof HTMLElementTagNameMap> =
   | Events<TagName>
   | EventsInput<TagName>[];
 
-export function events<TagName extends keyof HTMLElementTagNameMap>(...inputs: EventsInput<TagName>[]): Events<TagName> {
+export function events<TagName extends keyof HTMLElementTagNameMap>(
+  ...inputs: EventsInput<TagName>[]
+): Events<TagName> {
   const out: EventObject<TagName> = {};
 
   const visit = <NK extends keyof HTMLElementTagNameMap>(input: EventsInput<NK>) => {
@@ -36,10 +39,13 @@ export function events<TagName extends keyof HTMLElementTagNameMap>(...inputs: E
   return new Events(out);
 }
 
-export function applyEvents<TagName extends keyof HTMLElementTagNameMap>(node: HTMLElementTagNameMap[TagName], arg: Events<TagName>) {
+export function applyEvents<TagName extends keyof HTMLElementTagNameMap>(
+  node: HTMLElementTagNameMap[TagName],
+  arg: Events<TagName>,
+) {
   typedEntries(arg.events).forEach(([key, fn]) => {
     node.addEventListener(key, (event: any) => {
-      fn!!({node, event})
+      fn!({ node, event });
     });
-  })
+  });
 }

@@ -22,7 +22,6 @@ export function styles(...inputs: StyleObject[]): Styles {
   return new Styles(flat);
 }
 
-
 export class Styles {
   constructor(public readonly styles: CSSType.Properties) {}
 }
