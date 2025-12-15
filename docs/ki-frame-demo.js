@@ -301,6 +301,9 @@
   function isDefined(item) {
     return item !== void 0 && item !== null;
   }
+  function typedEntries(obj) {
+    return Object.entries(obj);
+  }
 
   // src/state.ts
   function shallowEqual(a2, b2) {
@@ -584,13 +587,21 @@
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
 
-  // src/css.ts
-  function css(style2) {
-    return new CSS(style2);
+  // src/domBuilderStyles.ts
+  function styles(...inputs) {
+    const flat = {};
+    for (const input2 of Array.from(inputs).flat()) {
+      if (input2 instanceof CSS) {
+        Object.assign(flat, input2.styles);
+      } else {
+        Object.assign(flat, input2);
+      }
+    }
+    return new CSS(flat);
   }
   var CSS = class {
-    constructor(styles) {
-      this.styles = styles;
+    constructor(styles2) {
+      this.styles = styles2;
     }
   };
   var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
@@ -686,6 +697,34 @@
     }
   };
 
+  // src/domBuilderEvents.ts
+  var EventConfiguration = class {
+    constructor(events2) {
+      this.events = events2;
+    }
+  };
+  function events(...inputs) {
+    const out = {};
+    const visit = (input2) => {
+      if (Array.isArray(input2)) {
+        for (const i2 of input2) visit(i2);
+      } else if (input2 instanceof EventConfiguration || "events" in input2) {
+        Object.assign(out, input2.events);
+      } else {
+        Object.assign(out, input2);
+      }
+    };
+    for (const input2 of inputs) visit(input2);
+    return new EventConfiguration(out);
+  }
+  function applyEvents(node, arg) {
+    typedEntries(arg.events).forEach(([key, fn]) => {
+      node.addEventListener(key, (event) => {
+        fn({ node, event });
+      });
+    });
+  }
+
   // src/domBuilder.ts
   function addItems(element, ...args) {
     args.forEach((arg) => {
@@ -697,6 +736,8 @@
         element.appendChild(arg.node);
       } else if (arg instanceof CSS) {
         applyCss(element, arg.styles);
+      } else if (arg instanceof EventConfiguration) {
+        applyEvents(element, arg);
       } else if (typeof arg === "string") {
         element.appendChild(getDocument().createTextNode(arg));
       } else if (typeof arg === "object") {
@@ -707,6 +748,10 @@
             } else {
               element.classList.add(argValue);
             }
+          } else if (key === "styles") {
+            applyCss(element, arg.styles);
+          } else if (key === "events") {
+            applyEvents(element, events(arg));
           } else if (key.startsWith("on") && typeof argValue === "function") {
             const event = key.substring(2).toLowerCase();
             element.addEventListener(event, argValue);
@@ -727,8 +772,8 @@
     }
     throw new Error("document is undefined");
   }
-  function createElement(tagNameOrElement, ...args) {
-    const element = getDocument().createElement(tagNameOrElement);
+  function createElement(tagName, ...args) {
+    const element = getDocument().createElement(tagName);
     addItems(element, ...args);
     return element;
   }
@@ -859,19 +904,37 @@
   function domBuilderWithState() {
     const createNodes = () => {
       const info = text();
-      const root = p("Click to update counter", div(info, css({ color: "green" })));
+      const root = p(
+        "Click buttons to update counter",
+        {
+          styles: {
+            color: "red"
+          }
+        },
+        div(info, styles({ color: "green" }))
+      );
       return { info, root };
     };
     function counter(state = createState({ total: 0 })) {
-      const nodes = createNodes();
-      state.addDomEvent("counter", nodes.root, "click", (ev) => state.set((cur) => ({ total: cur.total + 1 })));
+      const { root, info } = createNodes();
+      const reset = button(
+        "Reset",
+        {
+          events: {
+            click() {
+              state.set({ total: 0 });
+            }
+          }
+        }
+      );
+      state.addDomEvent("counter", root, "click", (ev) => state.set((cur) => ({ total: cur.total + 1 })));
       state.onValueChange((obj) => {
-        nodes.info.nodeValue = `Counter: ${obj.total}`;
+        info.nodeValue = `Counter: ${obj.total}`;
       });
       state.updateUi();
-      return nodes;
+      return div(root, reset);
     }
-    return counter().root;
+    return counter();
   }
 
   // src/fetch.ts

@@ -5,25 +5,25 @@ import { isDefined } from "./util/typeUtils";
 /**
  * Allowed value types: string | number | Array<string|number>
  */
-export type StyleValue = string | number | Array<string | number>;
+type StyleValue = string | number | Array<string | number>;
 //export type StyleObject = CSS.Properties<string | number | Array<string | number>>;
-export type StyleObject = (CSSType.Properties | CSS) | StyleObject[];
+export type StyleObject = (CSSType.Properties | Styles) | StyleObject[];
 
-export function css(...inputs: StyleObject[]): CSS {
+export function styles(...inputs: StyleObject[]): Styles {
   const flat: CSSType.Properties = {};
 
   for (const input of Array.from(inputs).flat()) {
-    if (input instanceof CSS) {
+    if (input instanceof Styles) {
       Object.assign(flat, input.styles);
     } else {
       Object.assign(flat, input);
     }
   }
-  return new CSS(flat);
+  return new Styles(flat);
 }
 
 
-export class CSS {
+export class Styles {
   constructor(public readonly styles: CSSType.Properties) {}
 }
 /**

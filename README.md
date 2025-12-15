@@ -37,14 +37,28 @@ fully accessible. It simplifies common patterns while maintaining direct interac
 A concise, expressive utility for constructing and managing DOM trees:
 
 - Simple syntax for creating DOM nodes and hierarchies
-- Optional extended API for common attributes and patterns
+- Extended API for listeners `events()` and inline `styles()` and classes
+
+```typescript
+p("Click this text to update counter", {
+  styles: {
+    color: "red",
+  },
+  events: {
+    click() {
+      state.set((cur) => ({total: cur.total + 1}))
+    }
+  }
+})
+```
 
 More information:
 
 - documentation: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
 - code:
     - [domBuilder.ts](src/domBuilder.ts)
-    - [css.ts](src/css.ts)
+    - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
+    - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
 
 ## State
 
@@ -133,10 +147,12 @@ More information:
     * **arrays** are iterated recursively and each item is added to the object
     * **WrappedNode** is used by dom extension APIs and contains the resulting dom Node instance. Is added to the object
       with .appendChild(arg.node)
-    * *CSS* object which is created with `css()`
+    * **Styles** object which is created with `styles()`
         * CSS code completition is implemented with https://github.com/frenic/csstype
         * multiple CSS definitions can be passed to objects, processing order is depth first
         * CSS definitions can be shared between multiple objects
+    * **Events** object which is created with `styles()`
+      * 
     * **object** which contains fields from HTMLElement and Text
         * fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
         * otherwise the key and value is set with `.setAttribute(key, value)`
@@ -147,7 +163,7 @@ More information:
 import {a, p, setElementToId} from "./domBuilder";
 
 const a1 = a("test link", {href: "/pow.html"}, css({color: 'red'}));
-setElementToId('app', p("POW!", a1, {onclick: () => console.log("pow!")}));
+setElementToId('app', p("POW!", events({click: () => console.log("pow!")})), a1);
 ```
 
 Checkout
@@ -503,15 +519,17 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     * group level validation: support for grouping inputs in to groups
     * Standard Schema support
 * Advanced stuff
-  * requestAnimationFrame - queue DOM reads and writes
-  * Virtualize long lists - Provide or recommend a tiny virtualization helper for lists (windowing) to render only visible items.
-  * IntersectionObserver - Lazy-load images/components when entering viewport.
-  * Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate progressively or lazy-load components.
-  * Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
-  * SSR
-      * Not yet
-      * domBuilder and state resource registration and jsdom can be used to collect data for SSR
-      * the client side needs to be able to hydrate in place
+    * requestAnimationFrame - queue DOM reads and writes
+    * Virtualize long lists - Provide or recommend a tiny virtualization helper for lists (windowing) to render only
+      visible items.
+    * IntersectionObserver - Lazy-load images/components when entering viewport.
+    * Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate
+      progressively or lazy-load components.
+    * Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
+    * SSR
+        * Not yet
+        * domBuilder and state resource registration and jsdom can be used to collect data for SSR
+        * the client side needs to be able to hydrate in place
 
 # What next?
 
