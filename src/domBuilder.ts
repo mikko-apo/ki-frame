@@ -1,3 +1,4 @@
+import type { HTMLInputTypeAttribute } from "react";
 import { Events, type EventsInput, setEvents } from "./domBuilderEvents";
 import { type StyleObject, Styles, setClass, setStyle } from "./domBuilderStyles";
 import { WrappedNode } from "./types";
@@ -200,6 +201,34 @@ export const wbr = createElementFn("wbr");
 // Other Nodes
 
 export const text = (arg: string | number = "") => getDocument().createTextNode(String(arg));
+
+// Extended Api
+
+const createInputFn =
+  (type: HTMLInputTypeAttribute) =>
+  (...args: CreateElementArgs<"input">) =>
+    createElement("input", { type }, ...args);
+export const inputButton = createInputFn("button");
+export const checkbox = createInputFn("checkbox");
+export const color = createInputFn("color");
+export const date = createInputFn("date");
+export const datetimeLocal = createInputFn("datetime-local");
+export const email = createInputFn("email");
+export const hidden = createInputFn("hidden");
+export const image = createInputFn("image");
+export const month = createInputFn("month");
+export const number = createInputFn("number");
+export const password = createInputFn("password");
+export const radio = createInputFn("radio");
+export const range = createInputFn("range");
+export const reset = createInputFn("reset");
+export const inputSearch = createInputFn("search");
+export const submit = createInputFn("submit");
+export const tel = createInputFn("tel");
+export const inputText = createInputFn("text");
+export const inputTime = createInputFn("time");
+export const url = createInputFn("url");
+export const week = createInputFn("week");
 
 // Render function that appends generated elements to the target element
 export function setElementToId(targetId: string, element: HTMLElement) {
