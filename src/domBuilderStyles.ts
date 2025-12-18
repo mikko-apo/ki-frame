@@ -2,6 +2,20 @@
 import type * as CSSType from "csstype";
 import { isDefined } from "./util/typeUtils";
 
+export type CssClass = string | CssClass[];
+
+export function setClass(element: HTMLElement, argValue: CssClass) {
+  const classList = element.classList;
+  const visit = (argValue: CssClass) => {
+    if (Array.isArray(argValue)) {
+      argValue.forEach((arg) => visit(arg));
+    } else {
+      classList.add(...argValue.split(" "));
+    }
+  };
+  visit(argValue);
+}
+
 /**
  * Allowed value types: string | number | Array<string|number>
  */
@@ -103,34 +117,36 @@ function convertArrayValue(prop: string, arr: Array<string | number | Array<stri
  * - Array values are flattened one level and joined with `, `.
  * - Numeric values for unitful properties get "px".
  */
-export function applyCss(el: HTMLElement, style: StyleObject) {
-  for (const key in style) {
-    // Skip prototype keys, ensure own property
-    if (!Object.prototype.hasOwnProperty.call(style, key)) continue;
-    const raw = style[key as keyof StyleObject] as unknown as StyleValue | undefined;
-    if (isDefined(raw)) {
-      // Handle CSS custom properties separately
-      if (key.startsWith("--")) {
-        if (Array.isArray(raw)) {
-          const val = convertArrayValue(key, raw as any);
-          el.style.setProperty(key, val);
-        } else {
-          const val = convertPrimitiveValue(key, raw as any);
-          el.style.setProperty(key, val);
+export function setStyle(el: HTMLElement, ...inputs: StyleObject[]) {
+  for (const style of inputs) {
+    for (const key in style) {
+      // Skip prototype keys, ensure own property
+      if (!Object.prototype.hasOwnProperty.call(style, key)) continue;
+      const raw = style[key as keyof StyleObject] as unknown as StyleValue | undefined;
+      if (isDefined(raw)) {
+        // Handle CSS custom properties separately
+        if (key.startsWith("--")) {
+          if (Array.isArray(raw)) {
+            const val = convertArrayValue(key, raw as any);
+            el.style.setProperty(key, val);
+          } else {
+            const val = convertPrimitiveValue(key, raw as any);
+            el.style.setProperty(key, val);
+          }
+          continue;
         }
-        continue;
-      }
 
-      // Standard camelCase style key assignment
-      // If the value is array -> convert to comma-joined string
-      let finalValue: string;
-      if (Array.isArray(raw)) {
-        finalValue = convertArrayValue(key, raw as any);
-      } else {
-        finalValue = convertPrimitiveValue(key, raw as any);
-      }
+        // Standard camelCase style key assignment
+        // If the value is array -> convert to comma-joined string
+        let finalValue: string;
+        if (Array.isArray(raw)) {
+          finalValue = convertArrayValue(key, raw as any);
+        } else {
+          finalValue = convertPrimitiveValue(key, raw as any);
+        }
 
-      (el.style as any)[key] = finalValue;
+        (el.style as any)[key] = finalValue;
+      }
     }
   }
 }

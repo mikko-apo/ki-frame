@@ -137,33 +137,56 @@ More information:
 
 ## Use fluent syntax for DOM trees
 
-1. Create DOM node trees with the fluent syntax
+1. It's easy to create DOM trees with domBuilder's functions: `div(p("Click me"))`. Builder function creates the
+   specified dom object. All DOM nodes are available as builder functions.
 2. Extract a variable for each HTMLElement or Text node that you want access separately. Pass the nodes as variables how
    you want.
-3. Each HTMLElement builder function creates the specified dom object and takes a list of parameters. Supported
-   parameters are:
-    * dom **HTMLElement** or **Text** instance is added with `.appendChild()`
+    ```typescript
+   const t = text()
+   t.nodeValue = "Click me"
+   const root = p(t)
+   ```
+3. Builder functions takes in a list of parameters. Supported parameters are:
     * **string** is added with `.appendChild(getDocument().createTextNode(arg))`
+    * dom **HTMLElement** or **Text** instances are added with `.appendChild()`
     * **arrays** are iterated recursively and each item is added to the object
     * **WrappedNode** is used by dom extension APIs and contains the resulting dom Node instance. Is added to the object
       with .appendChild(arg.node)
-    * **Styles** object which is created with `styles()`
-        * CSS code completition is implemented with https://github.com/frenic/csstype
-        * multiple CSS definitions can be passed to objects, processing order is depth first
-        * CSS definitions can be shared between multiple objects
-    * **Events** object which is created with `styles()`
-      * 
     * **object** which contains fields from HTMLElement and Text
-        * fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
-        * otherwise the key and value is set with `.setAttribute(key, value)`
-    * object's fields can be set with ´{href: """}´ syntax, this exposes **Partial<HTMLElement&gt; and some fields might
-      not work
+        * **styles:** object
+            * CSS code completition is implemented with https://github.com/frenic/csstype
+            * multiple CSS definitions can be passed to objects, processing order is depth first
+            * CSS definitions can be shared between multiple objects
+        * **events** object with DOM event fields
+            * each field is registered with `node.addEventListener(eventName, {node, event} => void)`
+            * handler takes in object parameter
+        * **class:** string
+            * can be a single string for single class name, space separated string for multiple class names, array list
+              of class names and nested arrays of class names
+        * otherwise
+            * fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
+            * the key and value is set with `.setAttribute(key, value)`
+            * note: some fields might not work
 
 ```typescript
 import {a, p, setElementToId} from "./domBuilder";
 
-const a1 = a("test link", {href: "/pow.html"}, css({color: 'red'}));
-setElementToId('app', p("POW!", events({click: () => console.log("pow!")})), a1);
+const state = createState({total: 0})
+const root = p("Click this text to update counter", {
+  styles: {
+    color: "red",
+  },
+  events: {
+    click() {
+      state.set((cur) => ({total: cur.total + 1}))
+    }
+  }
+})
+const info = text();
+state.onValueChange((obj) => {
+  info.nodeValue = `Counter: ${obj.total}`;
+});
+setElementToId('app', div(root, info));
 ```
 
 Checkout
@@ -179,7 +202,7 @@ reference inside the application to other functions and DOM nodes. Use `state.on
 State supports following functions for setting and notifying of state change:
 
 - `state.set(cur | fn: (old: T) => T)` sets new state value
-- `state.update(partial | fn: (old: T) => Partial<T>)` fn() can create new state based on the old state
+- `state.update(partial | fn: (old: T) => Partial<T>)` fn() can return partial state, which is applied to current state
 - `state.onChange(fn: (cur: T, old: T) => void): () => void` fn() can react to changes.
   `.onChange()`
   returns the unsubscribe function
@@ -231,7 +254,7 @@ Checkout
 * the more indepth demos at the demo site: https://mikko-apo.github.io/ki-frame#createStateDemo
 * source code [state.ts](src/state.ts)
 
-## How to structure code?
+## How to create components and structure code?
 
 There are two ways to create components with ki-frame:
 
