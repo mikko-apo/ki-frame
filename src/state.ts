@@ -9,8 +9,9 @@ import {
   TimeoutDestroyable,
 } from "./promiseDestroy";
 import type { DestroyCb, EventSource } from "./types";
+import { getByPath } from "./util/getByPath";
 import { createId } from "./util/objectIdCounter";
-import { copyAndSet } from "./util/setByPath";
+import { copyAndSet, setByPath } from "./util/setByPath";
 import { DestroyableSet } from "./util/strongOrWeakSet";
 import { isDefined } from "./util/typeUtils";
 
@@ -60,14 +61,14 @@ export class Context implements Destroyable {
     return state;
   }
 
-  createForm<T extends Record<string, any>>(
+  createForm<T extends Record<string, any>, Linked extends StateFromInputTree<T> = StateFromInputTree<T>>(
     t: T,
-    init: StateFromInputTree<T>,
+    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
     options?: {
       validate?: (value: StateFromInputTree<T>) => boolean;
     } & StateOptions,
   ): FormState<T> {
-    const form = new FormState(this, t, init, options);
+    const form = new FormState(this, t, initValuesOrLinkedState, options);
     this.controllers.add(form);
     return form;
   }
@@ -131,8 +132,10 @@ export class Controller extends Context {
     return this.getOutputChannel().subscribe(cb);
   }
 
-  addLinkedState<V extends Controller>(controller: V, options?: LinkControllerOptions) {
-    this.linkedStates.add({ controller, ...(options || {}) });
+  addLinkedState<V extends Controller>(controller: V, options?: LinkControllerOptions): Unsub {
+    const value = { controller, ...(options || {}) };
+    this.linkedStates.add(value);
+    return () => this.linkedStates.delete(value);
   }
 
   onDestroy(target: Destroyable | DestroyCb): Unsub {
@@ -170,6 +173,7 @@ export class Controller extends Context {
         linkedState.controller.destroy();
       }
     }
+    this.linkedStates.clear();
     // registered registeredSources & subcribed functions
     this.registeredSources.destroy();
     this.onDestroyListeners.destroy();
@@ -331,32 +335,54 @@ export class State<Value> extends Controller {
   }
 }
 
-export class FormState<T extends Record<string, any>> extends State<StateFromInputTree<T>> {
+export class FormState<
+  T extends Record<string, any>,
+  Linked extends StateFromInputTree<T> = StateFromInputTree<T>,
+> extends State<StateFromInputTree<T>> {
   constructor(
     parent: Context,
     t: T,
-    init: StateFromInputTree<T>,
+    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
     options?: { validate?: (value: StateFromInputTree<T>) => boolean } & StateOptions,
   ) {
     const { validate, ...stateOptions } = options || {};
-    super(parent, init, stateOptions);
     const inputs = collectFormsInputs(t);
-    if (validate) {
-      const validInputValuesState = this.createState(init, { name: "valid input values" });
-      validInputValuesState.onValueChange((newState) => {
-        if (!validate(newState)) {
+    if (initValuesOrLinkedState instanceof State) {
+      const initState = initValuesOrLinkedState.get();
+      const init = {};
+      inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
+      super(parent, init as StateFromInputTree<T>, stateOptions);
+      this.configureInputs(this, inputs);
+      this.onValueChange((newState) => {
+        if (validate && !validate(newState)) {
           return;
         }
-        this.set(newState);
+        initValuesOrLinkedState.update(newState);
       });
-      this.attachListeners(validInputValuesState, inputs);
     } else {
-      this.attachListeners(this, inputs);
+      super(parent, initValuesOrLinkedState, stateOptions);
+      if (validate) {
+        const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "valid input values" });
+        validInputValuesState.onValueChange((newState) => {
+          if (!validate(newState)) {
+            return;
+          }
+          this.set(newState);
+        });
+        this.configureInputs(validInputValuesState, inputs);
+      } else {
+        this.configureInputs(this, inputs);
+      }
     }
   }
 
-  private attachListeners(inputState: State<StateFromInputTree<T>>, inputs: PathTuple[]) {
+  private configureInputs(inputState: State<StateFromInputTree<T>>, inputs: PathTuple[]) {
     for (const [path, input] of inputs) {
+      const state = inputState.get();
+      const value = getByPath(state, path);
+      if (input.node instanceof HTMLInputElement) {
+        input.node.value = value as any;
+      }
       inputState.addDomEvent(path, input.node, input.key, (ev: Event) => {
         const value = input.map ? input.map(readRaw(input.node)) : readRaw(input.node);
         if (input.validate && !input.validate(value, input.node, ev)) {

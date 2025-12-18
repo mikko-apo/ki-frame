@@ -182,6 +182,25 @@
   };
 
   // src/util/setByPath.ts
+  function setByPath(obj, path, value) {
+    if (typeof path === "string") {
+      path = path.split(".").map((seg) => {
+        return /^[0-9]+$/.test(seg) ? Number(seg) : seg;
+      });
+    }
+    if (path.length === 0) return;
+    let cur = obj;
+    for (let i2 = 0; i2 < path.length - 1; i2++) {
+      const key = path[i2];
+      if (cur[key] == null) {
+        const nextKey = path[i2 + 1];
+        cur[key] = typeof nextKey === "number" ? [] : {};
+      }
+      cur = cur[key];
+    }
+    const lastKey = path[path.length - 1];
+    cur[lastKey] = value;
+  }
   function copyAndSet(obj, path, value) {
     const segments = Array.isArray(path)
       ? path.map((p2) => (typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2))
@@ -303,8 +322,25 @@
   function isDefined(item) {
     return item !== void 0 && item !== null;
   }
-  function typedEntries(obj) {
-    return Object.entries(obj);
+
+  // src/util/getByPath.ts
+  function getByPath(obj, path) {
+    if (obj == null) return void 0;
+    let segments = [];
+    if (Array.isArray(path)) {
+      segments = path.map((p2) => (typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2));
+    } else if (typeof path === "string") {
+      if (path === "") return obj;
+      segments = path.split(".").map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
+    } else {
+      return void 0;
+    }
+    let cur = obj;
+    for (const seg of segments) {
+      if (cur == null) return void 0;
+      cur = cur[seg];
+    }
+    return cur;
   }
 
   // src/state.ts
@@ -326,8 +362,8 @@
       this.controllers.add(state);
       return state;
     }
-    createForm(t, init, options) {
-      const form2 = new FormState(this, t, init, options);
+    createForm(t, initValuesOrLinkedState, options) {
+      const form2 = new FormState(this, t, initValuesOrLinkedState, options);
       this.controllers.add(form2);
       return form2;
     }
@@ -379,7 +415,9 @@
       return this.getOutputChannel().subscribe(cb);
     }
     addLinkedState(controller, options) {
-      this.linkedStates.add({ controller, ...(options || {}) });
+      const value = { controller, ...(options || {}) };
+      this.linkedStates.add(value);
+      return () => this.linkedStates.delete(value);
     }
     onDestroy(target) {
       if (typeof target === "function") {
@@ -417,6 +455,7 @@
           linkedState.controller.destroy();
         }
       }
+      this.linkedStates.clear();
       this.registeredSources.destroy();
       this.onDestroyListeners.destroy();
       for (const es of this.eventSources) {
@@ -544,31 +583,50 @@
     }
   };
   var FormState = class extends State {
-    constructor(parent, t, init, options) {
+    constructor(parent, t, initValuesOrLinkedState, options) {
       const { validate, ...stateOptions } = options || {};
-      super(parent, init, stateOptions);
       const inputs = collectFormsInputs(t);
-      if (validate) {
-        const validInputValuesState = this.createState(init, { name: "valid input values" });
-        validInputValuesState.onValueChange((newState) => {
-          if (!validate(newState)) {
+      if (initValuesOrLinkedState instanceof State) {
+        const initState = initValuesOrLinkedState.get();
+        const init = {};
+        inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
+        super(parent, init, stateOptions);
+        this.configureInputs(this, inputs);
+        this.onValueChange((newState) => {
+          if (validate && !validate(newState)) {
             return;
           }
-          this.set(newState);
+          initValuesOrLinkedState.update(newState);
         });
-        this.attachListeners(validInputValuesState, inputs);
       } else {
-        this.attachListeners(this, inputs);
+        super(parent, initValuesOrLinkedState, stateOptions);
+        if (validate) {
+          const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "valid input values" });
+          validInputValuesState.onValueChange((newState) => {
+            if (!validate(newState)) {
+              return;
+            }
+            this.set(newState);
+          });
+          this.configureInputs(validInputValuesState, inputs);
+        } else {
+          this.configureInputs(this, inputs);
+        }
       }
     }
-    attachListeners(inputState, inputs) {
+    configureInputs(inputState, inputs) {
       for (const [path, input2] of inputs) {
+        const state = inputState.get();
+        const value = getByPath(state, path);
+        if (input2.node instanceof HTMLInputElement) {
+          input2.node.value = value;
+        }
         inputState.addDomEvent(path, input2.node, input2.key, (ev) => {
-          const value = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
-          if (input2.validate && !input2.validate(value, input2.node, ev)) {
+          const value2 = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
+          if (input2.validate && !input2.validate(value2, input2.node, ev)) {
             return;
           }
-          const newState = copyAndSet(inputState.get(), path, value);
+          const newState = copyAndSet(inputState.get(), path, value2);
           inputState.set(newState);
         });
       }
@@ -594,7 +652,36 @@
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
 
+  // src/domBuilderEvents.ts
+  var Events = class {
+    constructor(events2) {
+      this.events = events2;
+    }
+  };
+  function events(events2) {
+    return new Events(events2 instanceof Events || "events" in events2 ? events2.events : events2);
+  }
+  function setEvents(node, arg) {
+    const ev = arg instanceof Events ? arg : events(arg);
+    Object.entries(ev.events).forEach(([key, fn]) => {
+      node.addEventListener(key, (event) => {
+        fn == null ? void 0 : fn({ node, event });
+      });
+    });
+  }
+
   // src/domBuilderStyles.ts
+  function setClass(element, argValue) {
+    const classList = element.classList;
+    const visit = (argValue2) => {
+      if (Array.isArray(argValue2)) {
+        argValue2.forEach((arg) => visit(arg));
+      } else {
+        classList.add(...argValue2.split(" "));
+      }
+    };
+    visit(argValue);
+  }
   function styles(...inputs) {
     const flat = {};
     for (const input2 of Array.from(inputs).flat()) {
@@ -668,28 +755,30 @@
     const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
     return parts.join(", ");
   }
-  function applyCss(el, style2) {
-    for (const key in style2) {
-      if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
-      const raw = style2[key];
-      if (isDefined(raw)) {
-        if (key.startsWith("--")) {
-          if (Array.isArray(raw)) {
-            const val = convertArrayValue(key, raw);
-            el.style.setProperty(key, val);
-          } else {
-            const val = convertPrimitiveValue(key, raw);
-            el.style.setProperty(key, val);
+  function setStyle(el, ...inputs) {
+    for (const style2 of inputs) {
+      for (const key in style2) {
+        if (!Object.hasOwn(style2, key)) continue;
+        const raw = style2[key];
+        if (isDefined(raw)) {
+          if (key.startsWith("--")) {
+            if (Array.isArray(raw)) {
+              const val = convertArrayValue(key, raw);
+              el.style.setProperty(key, val);
+            } else {
+              const val = convertPrimitiveValue(key, raw);
+              el.style.setProperty(key, val);
+            }
+            continue;
           }
-          continue;
+          let finalValue;
+          if (Array.isArray(raw)) {
+            finalValue = convertArrayValue(key, raw);
+          } else {
+            finalValue = convertPrimitiveValue(key, raw);
+          }
+          el.style[key] = finalValue;
         }
-        let finalValue;
-        if (Array.isArray(raw)) {
-          finalValue = convertArrayValue(key, raw);
-        } else {
-          finalValue = convertPrimitiveValue(key, raw);
-        }
-        el.style[key] = finalValue;
       }
     }
   }
@@ -704,34 +793,6 @@
     }
   };
 
-  // src/domBuilderEvents.ts
-  var Events = class {
-    constructor(events2) {
-      this.events = events2;
-    }
-  };
-  function events(...inputs) {
-    const out = {};
-    const visit = (input2) => {
-      if (Array.isArray(input2)) {
-        for (const i2 of input2) visit(i2);
-      } else if (input2 instanceof Events || "events" in input2) {
-        Object.assign(out, input2.events);
-      } else {
-        Object.assign(out, input2);
-      }
-    };
-    for (const input2 of inputs) visit(input2);
-    return new Events(out);
-  }
-  function applyEvents(node, arg) {
-    typedEntries(arg.events).forEach(([key, fn]) => {
-      node.addEventListener(key, (event) => {
-        fn({ node, event });
-      });
-    });
-  }
-
   // src/domBuilder.ts
   function addItems(element, ...args) {
     args.forEach((arg) => {
@@ -742,23 +803,19 @@
       } else if (arg instanceof WrappedNode) {
         element.appendChild(arg.node);
       } else if (arg instanceof Styles) {
-        applyCss(element, arg.styles);
+        setStyle(element, arg.styles);
       } else if (arg instanceof Events) {
-        applyEvents(element, arg);
+        setEvents(element, arg);
       } else if (typeof arg === "string") {
         element.appendChild(getDocument().createTextNode(arg));
       } else if (typeof arg === "object") {
         Object.entries(arg).forEach(([key, argValue]) => {
           if (key === "class") {
-            if (Array.isArray(argValue)) {
-              element.classList.add(...argValue);
-            } else {
-              element.classList.add(argValue);
-            }
+            setClass(element, argValue);
           } else if (key === "styles") {
-            applyCss(element, arg.styles);
+            setStyle(element, argValue);
           } else if (key === "events") {
-            applyEvents(element, events(arg));
+            setEvents(element, argValue);
           } else if (key.startsWith("on") && typeof argValue === "function") {
             const event = key.substring(2).toLowerCase();
             element.addEventListener(event, argValue);

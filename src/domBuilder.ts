@@ -1,6 +1,6 @@
-import {Events, type EventsInput, setEvents} from "./domBuilderEvents";
-import {setClass, setStyle, type StyleObject, Styles} from "./domBuilderStyles";
-import {WrappedNode} from "./types";
+import { Events, type EventsInput, setEvents } from "./domBuilderEvents";
+import { type StyleObject, Styles, setClass, setStyle } from "./domBuilderStyles";
+import { WrappedNode } from "./types";
 
 type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
   | HTMLElement
@@ -17,8 +17,7 @@ type ExtendedCreateElementAttributes<K extends keyof HTMLElementTagNameMap> = {
 type CreateElementArg<K extends keyof HTMLElementTagNameMap> =
   | CreateElementTypes<K>
   | CreateElementTypes<K>[]
-  | Partial<HTMLElementTagNameMap[K] & ExtendedCreateElementAttributes<K>
->;
+  | Partial<HTMLElementTagNameMap[K] & ExtendedCreateElementAttributes<K>>;
 export type CreateElementArgs<K extends keyof HTMLElementTagNameMap> = CreateElementArg<K>[];
 
 function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, ...args: CreateElementArgs<K>) {
@@ -82,8 +81,8 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 const createElementFn =
   <K extends keyof HTMLElementTagNameMap>(tagName: K) =>
-    (...args: CreateElementArgs<K>) =>
-      createElement(tagName, ...args);
+  (...args: CreateElementArgs<K>) =>
+    createElement(tagName, ...args);
 
 export const a = createElementFn("a");
 export const abbr = createElementFn("abbr");
