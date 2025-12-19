@@ -12,6 +12,7 @@ import type { DestroyCb, EventSource } from "./types";
 import { getByPath } from "./util/getByPath";
 import { createId } from "./util/objectIdCounter";
 import { copyAndSet, setByPath } from "./util/setByPath";
+import type { StandardSchemaV1 } from "./util/standardSchema";
 import { DestroyableSet } from "./util/strongOrWeakSet";
 import { isDefined } from "./util/typeUtils";
 
@@ -19,9 +20,14 @@ function shallowEqual(a: unknown, b: unknown) {
   return a === b;
 }
 
-export interface StateOptions {
-  name?: string;
-  weakRef?: boolean;
+export interface ControllerOptions {
+  name: string;
+  weakRef: boolean;
+}
+
+export interface StateOptions<S> extends Partial<ControllerOptions> {
+  schema?: StandardSchemaV1<unknown, S>;
+  onValidateFailure?: (failure: StandardSchemaV1.FailureResult) => void;
 }
 
 type ControllerDefaultEventShapes = [Readonly<{ type: "updateUi" }>];
@@ -49,13 +55,13 @@ export class Context implements Destroyable {
     public readonly controllers = new DestroyableSet<Context>("weak"),
   ) {}
 
-  createController(options?: StateOptions) {
+  createController(options?: ControllerOptions) {
     const controller = new Controller(this, options);
     this.controllers.add(controller);
     return controller;
   }
 
-  createState<Value>(initialValue: Value, options?: StateOptions): State<Value> {
+  createState<Value>(initialValue: Value, options?: StateOptions<Value>): State<Value> {
     const state = new State(this, initialValue, options);
     this.controllers.add(state);
     return state;
@@ -64,9 +70,7 @@ export class Context implements Destroyable {
   createForm<T extends Record<string, any>, Linked extends StateFromInputTree<T> = StateFromInputTree<T>>(
     t: T,
     initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
-    options?: {
-      validate?: (value: StateFromInputTree<T>) => boolean;
-    } & StateOptions,
+    options?: StateOptions<StateFromInputTree<T>>,
   ): FormState<T> {
     const form = new FormState(this, t, initValuesOrLinkedState, options);
     this.controllers.add(form);
@@ -80,7 +84,7 @@ export class Context implements Destroyable {
 }
 
 export class Controller extends Context {
-  private options: Required<StateOptions>;
+  public readonly options: ControllerOptions;
   private _destroyed = false;
   private readonly _stateId: string;
   private outputChannel?: Channel<ControllerDefaultEventShapes>;
@@ -89,7 +93,7 @@ export class Controller extends Context {
   private linkedStates = new Set<LinkedController>();
   private eventSources: EventSource<any>[] = [];
 
-  constructor(parent: Context, options?: StateOptions) {
+  constructor(parent: Context, options?: Partial<ControllerOptions>) {
     super(parent, new DestroyableSet<Context>());
     const { name = "state", weakRef = false } = options ?? {};
     this.options = { name, weakRef };
@@ -288,9 +292,13 @@ export class Controller extends Context {
 export class State<Value> extends Controller {
   public value: Value;
   private onChange?: Channel<[Readonly<Value>, Readonly<Value>]>;
+  protected schema?: StandardSchemaV1<unknown, Value>;
+  private onValidateFailure?: (failure: StandardSchemaV1.FailureResult) => void;
 
-  constructor(parent: Context, initialValue: Value, options?: StateOptions) {
+  constructor(parent: Context, initialValue: Value, options?: StateOptions<Value>) {
     super(parent, options);
+    this.schema = options?.schema;
+    this.onValidateFailure = options?.onValidateFailure;
     this.value = initialValue;
   }
 
@@ -311,8 +319,27 @@ export class State<Value> extends Controller {
     const old = this.value;
     const finalObj: Value = typeof newObj === "function" ? (newObj as (cur: Value) => Value)(this.value) : newObj;
     if (shallowEqual(old, finalObj)) return;
-    this.value = finalObj;
-    this.getOnChange().publish(finalObj, old);
+    const setAndPublish = () => {
+      this.value = finalObj;
+      this.getOnChange().publish(finalObj, old);
+    };
+    if (this.schema) {
+      const maybeResult = this.schema["~standard"].validate(finalObj);
+      const checkResult = (result: StandardSchemaV1.Result<Value>) => {
+        if (result.issues) {
+          this.onValidateFailure?.(result);
+        } else {
+          setAndPublish();
+        }
+      };
+      if (maybeResult instanceof Promise) {
+        maybeResult.then(checkResult);
+      } else {
+        checkResult(maybeResult);
+      }
+    } else {
+      setAndPublish();
+    }
   }
 
   update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>)) {
@@ -343,30 +370,23 @@ export class FormState<
     parent: Context,
     t: T,
     initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
-    options?: { validate?: (value: StateFromInputTree<T>) => boolean } & StateOptions,
+    options?: StateOptions<StateFromInputTree<T>>,
   ) {
-    const { validate, ...stateOptions } = options || {};
     const inputs = collectFormsInputs(t);
     if (initValuesOrLinkedState instanceof State) {
       const initState = initValuesOrLinkedState.get();
       const init = {};
       inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
-      super(parent, init as StateFromInputTree<T>, stateOptions);
+      super(parent, init as StateFromInputTree<T>, options);
       this.configureInputs(this, inputs);
       this.onValueChange((newState) => {
-        if (validate && !validate(newState)) {
-          return;
-        }
         initValuesOrLinkedState.update(newState);
       });
     } else {
-      super(parent, initValuesOrLinkedState, stateOptions);
-      if (validate) {
-        const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "valid input values" });
+      super(parent, initValuesOrLinkedState, options);
+      if (this.schema) {
+        const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "input values" });
         validInputValuesState.onValueChange((newState) => {
-          if (!validate(newState)) {
-            return;
-          }
           this.set(newState);
         });
         this.configureInputs(validInputValuesState, inputs);

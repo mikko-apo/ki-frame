@@ -1,8 +1,9 @@
 import { createController, getDefaultContext } from "..";
 import { br, button, div, hr, input, pre, setElementToId, table, td, tr } from "../domBuilder";
 import { domBuilderWithState } from "./01_domBuilderStateDemo";
-import { fetchDemo } from "./02_fetchDemo";
-import { createFormStateDemo } from "./03_formDemo";
+import { standardSchemaStateDemo } from "./02_standardSchemaState";
+import { fetchDemo } from "./03_fetchDemo";
+import { createFormStateDemo } from "./04_formDemo";
 import { channelsDemo } from "./channelsDemo";
 import { basicCounter } from "./simpleDemos";
 import { simpleForm } from "./simpleFormDemo";
@@ -18,6 +19,7 @@ const demo = (title: string, fn: () => HTMLElement) => ({ title, fn });
 
 const demos: Demo[] = [
   demo("testable counter", domBuilderWithState),
+  demo("standard schema prevents unwanted changes", standardSchemaStateDemo),
   demo("fetch examples", fetchDemo),
   demo("form handling with createFormState", createFormStateDemo),
   demo("counter(), naive 2010 DOM node version", basicCounter),
