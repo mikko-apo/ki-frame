@@ -26,14 +26,7 @@ interface EventSourceBase<T extends object> {
 /**
  * Extended dom node APIs can create objects that extend from this class. node() returns the underlying dom node object
  */
-export class WrappedNode {
-  private _node: Node;
-
-  constructor(node: Node) {
-    this._node = node;
-  }
-
-  public get node(): Node {
-    return this._node;
+export class WrappedNode<T extends Node> {
+  constructor(public readonly node: T) {
   }
 }

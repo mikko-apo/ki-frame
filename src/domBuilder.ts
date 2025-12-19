@@ -4,10 +4,10 @@ import { type StyleObject, Styles, setClass, setStyle } from "./domBuilderStyles
 import { WrappedNode } from "./types";
 
 type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
-  | HTMLElement
+  | Node
   | Text
   | string
-  | WrappedNode
+  | WrappedNode<Node>
   | Styles
   | Events<K>;
 type ExtendedCreateElementAttributes<K extends keyof HTMLElementTagNameMap> = {
