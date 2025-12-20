@@ -1,7 +1,8 @@
-import type { HTMLInputTypeAttribute } from "react";
-import { Events, type EventsInput, setEvents } from "./domBuilderEvents";
-import { type StyleObject, Styles, setClass, setStyle } from "./domBuilderStyles";
-import { WrappedNode } from "./types";
+import type {HTMLInputTypeAttribute} from "react";
+import {Events, type EventsInput, setEvents} from "./domBuilderEvents";
+import {type StyleObject, Styles, setClass, setStyle} from "./domBuilderStyles";
+import {WrappedNode} from "./types";
+import type {StandardSchemaV1} from "./util/standardSchema";
 
 type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
   | Node
@@ -10,21 +11,50 @@ type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
   | WrappedNode<Node>
   | Styles
   | Events<K>;
-type ExtendedCreateElementAttributes<K extends keyof HTMLElementTagNameMap> = {
+type ExtendedElementAttributes<K extends keyof HTMLElementTagNameMap> = {
   class: string | string[];
   styles: StyleObject;
   events: EventsInput<K>;
 };
+export type ExtendedFormAttributes = {
+  onError?: OnErrorFn
+  event?: keyof HTMLElementEventMap
+  schema?: StandardSchemaV1<unknown, unknown>
+}
 type CreateElementArg<K extends keyof HTMLElementTagNameMap> =
   | CreateElementTypes<K>
   | CreateElementTypes<K>[]
-  | Partial<HTMLElementTagNameMap[K] & ExtendedCreateElementAttributes<K>>;
+  | Partial<HTMLElementTagNameMap[K] & ExtendedElementAttributes<K> & ExtendedFormAttributes>;
 export type CreateElementArgs<K extends keyof HTMLElementTagNameMap> = CreateElementArg<K>[];
 
-function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, ...args: CreateElementArgs<K>) {
+type HasOnErrorInArgs<A extends readonly any[]> =
+// if any member of the array/tuple (A[number]) is assignable to an object with onError, true, else false
+  [Extract<A[number], { onError: OnErrorFn }>] extends [never]
+    ? false
+    : true;
+
+export type OnErrorFn = (params: {isOk: boolean, node?: any}) => void
+
+export class ExtendedFormInput<T extends HTMLElement> extends WrappedNode<T> {
+  constructor(
+    node: T,
+    public onErrors?: OnErrorFn[],
+    public event?: keyof HTMLElementEventMap,
+    public schema?: StandardSchemaV1<unknown, unknown>
+  ) {
+    super(node);
+  }
+
+  callOnErrors(isOk: boolean) {
+    this.onErrors?.forEach(fn => fn({node: this.node, isOk: isOk}));
+  }
+
+}
+
+function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, args: CreateElementArgs<K>, extendedInput = new ExtendedFormInput(element)) {
   args.forEach((arg) => {
     if (Array.isArray(arg)) {
-      addItems(element, ...arg);
+      addItems(element, arg, extendedInput);
     } else if (isNode(arg)) {
       element.appendChild(arg);
     } else if (arg instanceof WrappedNode) {
@@ -43,6 +73,15 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
           setStyle(element, argValue);
         } else if (key === "events") {
           setEvents(element, argValue);
+        } else if (key === "onError") {
+          if (!extendedInput.onErrors) {
+            extendedInput.onErrors = []
+          }
+          extendedInput.onErrors.push(argValue)
+        } else if (key === "event") {
+          extendedInput.event = argValue
+        } else if (key === "schema") {
+          extendedInput.schema = argValue
         } else if (key.startsWith("on") && typeof argValue === "function") {
           const event = key.substring(2).toLowerCase();
           element.addEventListener(event, argValue);
@@ -52,6 +91,9 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
       });
     }
   });
+  if (extendedInput.onErrors || extendedInput.schema) {
+    return extendedInput
+  }
 }
 
 var doc: Document | undefined = typeof document !== "undefined" ? document : undefined;
@@ -71,19 +113,27 @@ function getDocument() {
   throw new Error("document is undefined");
 }
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
+function createElement<K extends keyof HTMLElementTagNameMap,
+  A extends CreateElementArgs<K> = CreateElementArgs<K>>(
   tagName: keyof HTMLElementTagNameMap,
   ...args: CreateElementArgs<K>
-): HTMLElementTagNameMap[K] {
+): HasOnErrorInArgs<A> extends true
+  ? ExtendedFormInput<HTMLElementTagNameMap[K]>
+  : HTMLElementTagNameMap[K] {
   const element = getDocument().createElement(tagName);
-  addItems(element, ...args);
+  const ret = addItems(element, args);
+  if (ret) {
+    return ret as any
+  }
   return element as HTMLElementTagNameMap[K];
 }
 
 const createElementFn =
-  <K extends keyof HTMLElementTagNameMap>(tagName: K) =>
-  (...args: CreateElementArgs<K>) =>
-    createElement(tagName, ...args);
+  <K extends keyof HTMLElementTagNameMap, A extends CreateElementArgs<K> = CreateElementArgs<K>>(tagName: K) =>
+    (...args: CreateElementArgs<K>): HasOnErrorInArgs<A> extends true
+      ? ExtendedFormInput<HTMLElementTagNameMap[K]>
+      : HTMLElementTagNameMap[K] =>
+      createElement(tagName, ...args);
 
 export const a = createElementFn("a");
 export const abbr = createElementFn("abbr");
@@ -206,8 +256,8 @@ export const text = (arg: string | number = "") => getDocument().createTextNode(
 
 const createInputFn =
   (type: HTMLInputTypeAttribute) =>
-  (...args: CreateElementArgs<"input">) =>
-    createElement("input", { type }, ...args);
+    (...args: CreateElementArgs<"input">) =>
+      createElement("input", {type}, ...args);
 export const inputButton = createInputFn("button");
 export const checkbox = createInputFn("checkbox");
 export const color = createInputFn("color");
@@ -217,7 +267,7 @@ export const email = createInputFn("email");
 export const hidden = createInputFn("hidden");
 export const image = createInputFn("image");
 export const month = createInputFn("month");
-export const number = createInputFn("number");
+export const inputNumber = createInputFn("number");
 export const password = createInputFn("password");
 export const radio = createInputFn("radio");
 export const range = createInputFn("range");

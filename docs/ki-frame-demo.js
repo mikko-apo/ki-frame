@@ -84,110 +84,371 @@
     }
   };
 
-  // src/form.ts
-  var FormsInput = class {
-    constructor(node, key, map3, validate) {
-      this.node = node;
-      this.key = key;
-      this.map = map3;
-      this.validate = validate;
+  // src/domBuilderEvents.ts
+  var Events = class {
+    constructor(events2) {
+      this.events = events2;
     }
   };
-  function formEvent(node, key, map3, validate) {
-    return new FormsInput(node, key, map3, validate);
+  function events(events2) {
+    return new Events(events2 instanceof Events || "events" in events2 ? events2.events : events2);
   }
-  function collectFormsInputs(root) {
-    const out = [];
-    function visit(node, pathParts) {
-      if (node == null) return;
-      if (node instanceof FormsInput) {
-        const path = pathParts.map((p2) => String(p2)).join(".");
-        out.push([path, node]);
-        return;
-      }
-      if (Array.isArray(node)) {
-        for (let i2 = 0; i2 < node.length; i2++) {
-          visit(node[i2], [...pathParts, i2]);
-        }
-        return;
-      }
-      if (typeof node === "object") {
-        for (const key of Object.keys(node)) {
-          visit(node[key], [...pathParts, key]);
-        }
-        return;
-      }
-    }
-    visit(root, []);
-    return out;
-  }
-  function readRaw(node) {
-    var _a4;
-    const anyNode = node;
-    if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
-    return String((_a4 = node.textContent) != null ? _a4 : "");
+  function setEvents(node, arg) {
+    const ev = arg instanceof Events ? arg : events(arg);
+    Object.entries(ev.events).forEach(([key, fn]) => {
+      node.addEventListener(key, (event) => {
+        fn == null ? void 0 : fn({ node, event });
+      });
+    });
   }
 
-  // src/promiseDestroy.ts
-  var PromiseDestroy = class _PromiseDestroy {
-    constructor(promise2, destroy = () => {
-    }) {
-      this.promise = promise2;
-      this.destroy = destroy;
-    }
-    /**
-     * Promise.then implementation. Can be used to map the response to another value
-     *
-     * - Delegates to the internal `response` promise.
-     * - Returns a NEW FetchReturn whose `response` is the mapped promise.
-     * - If no handlers are provided, returns `this` (typed via cast).
-     */
-    then(onfulfilled, onrejected) {
-      if (!onfulfilled && !onrejected) {
-        return this.promise;
+  // src/util/typeUtils.ts
+  function isDefined(item) {
+    return item !== void 0 && item !== null;
+  }
+  function isInstanceOfAny(obj, ctors) {
+    return ctors.some((ctor) => obj instanceof ctor);
+  }
+
+  // src/domBuilderStyles.ts
+  function setClass(element, argValue) {
+    const classList = element.classList;
+    const visit = (argValue2) => {
+      if (Array.isArray(argValue2)) {
+        argValue2.forEach((arg) => visit(arg));
+      } else {
+        classList.add(...argValue2.split(" "));
       }
-      return this.promise.then(onfulfilled, onrejected);
-    }
-    catch(onrejected) {
-      if (!onrejected) {
-        return this;
+    };
+    visit(argValue);
+  }
+  function styles(...inputs) {
+    const flat = {};
+    for (const input2 of Array.from(inputs).flat()) {
+      if (input2 instanceof Styles) {
+        Object.assign(flat, input2.styles);
+      } else {
+        Object.assign(flat, input2);
       }
-      return this.promise.catch(onrejected);
     }
-    finally(onfinally) {
-      return this.promise.finally(onfinally);
-    }
-    get [Symbol.toStringTag]() {
-      return _PromiseDestroy.name;
-    }
-    /**
-     * Optional: explicit toString which mirrors Object.prototype.toString
-     */
-    toString() {
-      return Object.prototype.toString.call(this);
+    return new Styles(flat);
+  }
+  var Styles = class {
+    constructor(styles2) {
+      this.styles = styles2;
     }
   };
-  var _a;
-  var TimeoutDestroyable = class {
-    constructor(fn, timeout) {
-      this.fn = fn;
-      this.timeout = timeout;
-      this.at = Date.now() + ((_a = this.timeout) != null ? _a : 0);
-      this.id = setTimeout(this.fn, this.timeout);
+  var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
+    // common layout/size props
+    "width",
+    "height",
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "minWidth",
+    "minHeight",
+    "maxWidth",
+    "maxHeight",
+    "margin",
+    "marginTop",
+    "marginBottom",
+    "marginLeft",
+    "marginRight",
+    "padding",
+    "paddingTop",
+    "paddingBottom",
+    "paddingLeft",
+    "paddingRight",
+    "gap",
+    "rowGap",
+    "columnGap",
+    "fontSize",
+    "borderWidth",
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+    "borderRadius",
+    "outlineWidth",
+    "letterSpacing",
+    "lineHeight"
+  ]);
+  function convertPrimitiveValue(prop, val) {
+    if (val === null || val === void 0) return "";
+    if (typeof val === "number") {
+      if (prop.startsWith("--")) return String(val);
+      if (UNIT_PX_PROPS.has(prop)) return `${val}px`;
+      return String(val);
     }
-    destroy() {
-      clearTimeout(this.id);
+    return String(val);
+  }
+  function convertArrayValue(prop, arr) {
+    const flat = [];
+    for (const v of arr) {
+      if (Array.isArray(v)) {
+        for (const vv of v) flat.push(vv);
+      } else {
+        flat.push(v);
+      }
+    }
+    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
+    return parts.join(", ");
+  }
+  function setStyle(el, ...inputs) {
+    for (const style2 of inputs) {
+      for (const key in style2) {
+        if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
+        const raw = style2[key];
+        if (isDefined(raw)) {
+          if (key.startsWith("--")) {
+            if (Array.isArray(raw)) {
+              const val = convertArrayValue(key, raw);
+              el.style.setProperty(key, val);
+            } else {
+              const val = convertPrimitiveValue(key, raw);
+              el.style.setProperty(key, val);
+            }
+            continue;
+          }
+          let finalValue;
+          if (Array.isArray(raw)) {
+            finalValue = convertArrayValue(key, raw);
+          } else {
+            finalValue = convertPrimitiveValue(key, raw);
+          }
+          el.style[key] = finalValue;
+        }
+      }
+    }
+  }
+
+  // src/types.ts
+  var WrappedNode = class {
+    constructor(node) {
+      this.node = node;
     }
   };
-  var FetchDestroyable = class extends PromiseDestroy {
-    constructor(url3, timeoutMs, promise2, destroy) {
-      super(promise2, destroy);
-      this.url = url3;
-      this.timeoutMs = timeoutMs;
-      this.promise = promise2;
-      this.destroy = destroy;
+
+  // src/domBuilder.ts
+  var ExtendedFormInput = class extends WrappedNode {
+    constructor(node, onErrors, event, schema) {
+      super(node);
+      this.onErrors = onErrors;
+      this.event = event;
+      this.schema = schema;
+    }
+    callOnErrors(isOk) {
+      var _a4;
+      (_a4 = this.onErrors) == null ? void 0 : _a4.forEach((fn) => fn({ node: this.node, isOk }));
     }
   };
+  function addItems(element, args, extendedInput = new ExtendedFormInput(element)) {
+    args.forEach((arg) => {
+      if (Array.isArray(arg)) {
+        addItems(element, arg, extendedInput);
+      } else if (isNode(arg)) {
+        element.appendChild(arg);
+      } else if (arg instanceof WrappedNode) {
+        element.appendChild(arg.node);
+      } else if (arg instanceof Styles) {
+        setStyle(element, arg.styles);
+      } else if (arg instanceof Events) {
+        setEvents(element, arg);
+      } else if (typeof arg === "string") {
+        element.appendChild(getDocument().createTextNode(arg));
+      } else if (typeof arg === "object") {
+        Object.entries(arg).forEach(([key, argValue]) => {
+          if (key === "class") {
+            setClass(element, argValue);
+          } else if (key === "styles") {
+            setStyle(element, argValue);
+          } else if (key === "events") {
+            setEvents(element, argValue);
+          } else if (key === "onError") {
+            if (!extendedInput.onErrors) {
+              extendedInput.onErrors = [];
+            }
+            extendedInput.onErrors.push(argValue);
+          } else if (key === "event") {
+            extendedInput.event = argValue;
+          } else if (key === "schema") {
+            extendedInput.schema = argValue;
+          } else if (key.startsWith("on") && typeof argValue === "function") {
+            const event = key.substring(2).toLowerCase();
+            element.addEventListener(event, argValue);
+          } else {
+            element.setAttribute(key, argValue);
+          }
+        });
+      }
+    });
+    if (extendedInput.onErrors || extendedInput.schema) {
+      return extendedInput;
+    }
+  }
+  var doc = typeof document !== "undefined" ? document : void 0;
+  var isNode = (e) => {
+    return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
+  };
+  function getDocument() {
+    if (doc) {
+      return doc;
+    }
+    throw new Error("document is undefined");
+  }
+  function createElement(tagName, ...args) {
+    const element = getDocument().createElement(tagName);
+    const ret = addItems(element, args);
+    if (ret) {
+      return ret;
+    }
+    return element;
+  }
+  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
+  var a = createElementFn("a");
+  var abbr = createElementFn("abbr");
+  var address = createElementFn("address");
+  var area = createElementFn("area");
+  var article = createElementFn("article");
+  var aside = createElementFn("aside");
+  var audio = createElementFn("audio");
+  var b = createElementFn("b");
+  var base = createElementFn("base");
+  var bdi = createElementFn("bdi");
+  var bdo = createElementFn("bdo");
+  var blockquote = createElementFn("blockquote");
+  var body = createElementFn("body");
+  var br = createElementFn("br");
+  var button = createElementFn("button");
+  var canvas = createElementFn("canvas");
+  var caption = createElementFn("caption");
+  var cite = createElementFn("cite");
+  var code = createElementFn("code");
+  var col = createElementFn("col");
+  var colgroup = createElementFn("colgroup");
+  var data = createElementFn("data");
+  var datalist = createElementFn("datalist");
+  var dd = createElementFn("dd");
+  var del = createElementFn("del");
+  var details = createElementFn("details");
+  var dfn = createElementFn("dfn");
+  var dialog = createElementFn("dialog");
+  var div = createElementFn("div");
+  var dl = createElementFn("dl");
+  var dt = createElementFn("dt");
+  var em = createElementFn("em");
+  var embed = createElementFn("embed");
+  var fieldset = createElementFn("fieldset");
+  var figcaption = createElementFn("figcaption");
+  var figure = createElementFn("figure");
+  var footer = createElementFn("footer");
+  var form = createElementFn("form");
+  var h1 = createElementFn("h1");
+  var h2 = createElementFn("h2");
+  var h3 = createElementFn("h3");
+  var h4 = createElementFn("h4");
+  var h5 = createElementFn("h5");
+  var h6 = createElementFn("h6");
+  var head = createElementFn("head");
+  var header = createElementFn("header");
+  var hgroup = createElementFn("hgroup");
+  var hr = createElementFn("hr");
+  var html = createElementFn("html");
+  var i = createElementFn("i");
+  var iframe = createElementFn("iframe");
+  var img = createElementFn("img");
+  var input = createElementFn("input");
+  var ins = createElementFn("ins");
+  var kbd = createElementFn("kbd");
+  var label = createElementFn("label");
+  var legend = createElementFn("legend");
+  var li = createElementFn("li");
+  var link = createElementFn("link");
+  var main = createElementFn("main");
+  var map = createElementFn("map");
+  var mark = createElementFn("mark");
+  var menu = createElementFn("menu");
+  var meta = createElementFn("meta");
+  var meter = createElementFn("meter");
+  var nav = createElementFn("nav");
+  var noscript = createElementFn("noscript");
+  var object = createElementFn("object");
+  var ol = createElementFn("ol");
+  var optgroup = createElementFn("optgroup");
+  var option = createElementFn("option");
+  var output = createElementFn("output");
+  var p = createElementFn("p");
+  var picture = createElementFn("picture");
+  var pre = createElementFn("pre");
+  var progress = createElementFn("progress");
+  var q = createElementFn("q");
+  var rp = createElementFn("rp");
+  var rt = createElementFn("rt");
+  var ruby = createElementFn("ruby");
+  var s = createElementFn("s");
+  var samp = createElementFn("samp");
+  var script = createElementFn("script");
+  var search = createElementFn("search");
+  var section = createElementFn("section");
+  var select = createElementFn("select");
+  var slot = createElementFn("slot");
+  var small = createElementFn("small");
+  var source = createElementFn("source");
+  var span = createElementFn("span");
+  var strong = createElementFn("strong");
+  var style = createElementFn("style");
+  var sub = createElementFn("sub");
+  var summary = createElementFn("summary");
+  var sup = createElementFn("sup");
+  var table = createElementFn("table");
+  var tbody = createElementFn("tbody");
+  var td = createElementFn("td");
+  var template = createElementFn("template");
+  var textarea = createElementFn("textarea");
+  var tfoot = createElementFn("tfoot");
+  var th = createElementFn("th");
+  var thead = createElementFn("thead");
+  var time = createElementFn("time");
+  var title = createElementFn("title");
+  var tr = createElementFn("tr");
+  var track = createElementFn("track");
+  var u = createElementFn("u");
+  var ul = createElementFn("ul");
+  var varE = createElementFn("var");
+  var video = createElementFn("video");
+  var wbr = createElementFn("wbr");
+  var text = (arg = "") => getDocument().createTextNode(String(arg));
+  var createInputFn = (type) => (...args) => createElement("input", { type }, ...args);
+  var inputButton = createInputFn("button");
+  var checkbox = createInputFn("checkbox");
+  var color = createInputFn("color");
+  var date = createInputFn("date");
+  var datetimeLocal = createInputFn("datetime-local");
+  var email = createInputFn("email");
+  var hidden = createInputFn("hidden");
+  var image = createInputFn("image");
+  var month = createInputFn("month");
+  var inputNumber = createInputFn("number");
+  var password = createInputFn("password");
+  var radio = createInputFn("radio");
+  var range = createInputFn("range");
+  var reset = createInputFn("reset");
+  var inputSearch = createInputFn("search");
+  var submit = createInputFn("submit");
+  var tel = createInputFn("tel");
+  var inputText = createInputFn("text");
+  var inputTime = createInputFn("time");
+  var url = createInputFn("url");
+  var week = createInputFn("week");
+  function setElementToId(targetId, element) {
+    const targetElement = getDocument().getElementById(targetId);
+    if (targetElement) {
+      targetElement.replaceChildren(element);
+    } else {
+      console.error(`Target element with ID "${targetId}" not found!`);
+    }
+  }
 
   // src/util/getByPath.ts
   function getByPath(obj, path) {
@@ -261,6 +522,160 @@
     }
     return newChild;
   }
+
+  // src/util/standardSchemaUtil.ts
+  function schemaValidate(schema, obj, processValue, onValidateFailure) {
+    const checkResult = (result) => {
+      if (result.issues) {
+        onValidateFailure == null ? void 0 : onValidateFailure(result);
+      } else {
+        processValue(result.value);
+      }
+    };
+    const maybePromise = schema["~standard"].validate(obj);
+    if (maybePromise instanceof Promise) {
+      maybePromise.then(checkResult);
+    } else {
+      checkResult(maybePromise);
+    }
+  }
+  function standardSchemaPathToString(path) {
+    if (!Array.isArray(path)) {
+      throw new Error(path + " must be an array");
+    }
+    return path.map((segment) => {
+      var _a4;
+      const key = typeof segment === "object" && segment !== null && "key" in segment ? segment.key : segment;
+      if (typeof key === "symbol") {
+        return (_a4 = key.description) != null ? _a4 : key.toString();
+      }
+      return String(key);
+    }).join(".");
+  }
+
+  // src/form.ts
+  var htmlFormInputClasses = [HTMLInputElement, HTMLSelectElement, HTMLTextAreaElement];
+  function collectFormsInputs(root) {
+    const out = [];
+    function visit(node, pathParts) {
+      if (!isDefined(node)) return;
+      if (isInstanceOfAny(node, htmlFormInputClasses) || node instanceof ExtendedFormInput && isInstanceOfAny(node.node, htmlFormInputClasses)) {
+        const path = pathParts.map((p2) => String(p2)).join(".");
+        out.push([path, node]);
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (let i2 = 0; i2 < node.length; i2++) {
+          visit(node[i2], [...pathParts, i2]);
+        }
+        return;
+      }
+      if (typeof node === "object") {
+        for (const key of Object.keys(node)) {
+          visit(node[key], [...pathParts, key]);
+        }
+        return;
+      }
+    }
+    visit(root, []);
+    return out;
+  }
+  function readRaw(node) {
+    var _a4;
+    const anyNode = node;
+    if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
+    return String((_a4 = node.textContent) != null ? _a4 : "");
+  }
+  function configureInputInitialValuesListeners(inputState, inputs) {
+    for (const [path, input2] of inputs) {
+      const stateValue = inputState.get();
+      const inputValue = getByPath(stateValue, path);
+      const extendedFormInput = input2 instanceof ExtendedFormInput ? input2 : void 0;
+      const node = input2 instanceof ExtendedFormInput ? input2.node : input2;
+      if (node instanceof HTMLInputElement || node instanceof HTMLSelectElement || node instanceof HTMLTextAreaElement) {
+        node.name = path;
+        node.value = inputValue;
+      }
+      inputState.addDomEvent(path, node, (extendedFormInput == null ? void 0 : extendedFormInput.event) || "change", (ev) => {
+        const value = readRaw(node);
+        const setValue = () => {
+          const newState = copyAndSet(inputState.get(), path, value);
+          inputState.set(newState);
+        };
+        if (extendedFormInput && extendedFormInput.schema && extendedFormInput.onErrors) {
+          schemaValidate(extendedFormInput.schema, value, () => {
+            extendedFormInput.callOnErrors(false);
+            setValue();
+          }, () => {
+            extendedFormInput.callOnErrors(true);
+          });
+        } else {
+          setValue();
+        }
+      });
+    }
+  }
+
+  // src/promiseDestroy.ts
+  var PromiseDestroy = class _PromiseDestroy {
+    constructor(promise2, destroy = () => {
+    }) {
+      this.promise = promise2;
+      this.destroy = destroy;
+    }
+    /**
+     * Promise.then implementation. Can be used to map the response to another value
+     *
+     * - Delegates to the internal `response` promise.
+     * - Returns a NEW FetchReturn whose `response` is the mapped promise.
+     * - If no handlers are provided, returns `this` (typed via cast).
+     */
+    then(onfulfilled, onrejected) {
+      if (!onfulfilled && !onrejected) {
+        return this.promise;
+      }
+      return this.promise.then(onfulfilled, onrejected);
+    }
+    catch(onrejected) {
+      if (!onrejected) {
+        return this;
+      }
+      return this.promise.catch(onrejected);
+    }
+    finally(onfinally) {
+      return this.promise.finally(onfinally);
+    }
+    get [Symbol.toStringTag]() {
+      return _PromiseDestroy.name;
+    }
+    /**
+     * Optional: explicit toString which mirrors Object.prototype.toString
+     */
+    toString() {
+      return Object.prototype.toString.call(this);
+    }
+  };
+  var _a;
+  var TimeoutDestroyable = class {
+    constructor(fn, timeout) {
+      this.fn = fn;
+      this.timeout = timeout;
+      this.at = Date.now() + ((_a = this.timeout) != null ? _a : 0);
+      this.id = setTimeout(this.fn, this.timeout);
+    }
+    destroy() {
+      clearTimeout(this.id);
+    }
+  };
+  var FetchDestroyable = class extends PromiseDestroy {
+    constructor(url3, timeoutMs, promise2, destroy) {
+      super(promise2, destroy);
+      this.url = url3;
+      this.timeoutMs = timeoutMs;
+      this.promise = promise2;
+      this.destroy = destroy;
+    }
+  };
 
   // src/util/strongOrWeakSet.ts
   var StrongOrWeakSet = class {
@@ -342,11 +757,6 @@
     }
   };
 
-  // src/util/typeUtils.ts
-  function isDefined(item) {
-    return item !== void 0 && item !== null;
-  }
-
   // src/state.ts
   function shallowEqual(a2, b2) {
     return a2 === b2;
@@ -366,8 +776,8 @@
       this.controllers.add(state);
       return state;
     }
-    createForm(t, initValuesOrLinkedState, options) {
-      const form2 = new FormState(this, t, initValuesOrLinkedState, options);
+    createForm(inputShape, initValuesOrLinkedState, options) {
+      const form2 = new FormState(this, inputShape, initValuesOrLinkedState, options);
       this.controllers.add(form2);
       return form2;
     }
@@ -520,8 +930,7 @@
       const response = fetch(url3, { ...fetchInit, signal: abortController == null ? void 0 : abortController.signal });
       const maybeOkResponse = assertOk ? response.then((response2) => {
         if (typeof assertOk === "function" && assertOk(response2) === false || !response2.ok) {
-          const cause = { errorResponse: response2 };
-          throw cause;
+          throw { errorResponse: response2 };
         }
         return response2;
       }) : response;
@@ -558,7 +967,7 @@
       }
       return this.onChange;
     }
-    set(newObj) {
+    set(newObj, onValidateFailure) {
       if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
       const old = this.value;
       const finalObj = typeof newObj === "function" ? newObj(this.value) : newObj;
@@ -568,30 +977,19 @@
         this.getOnChange().publish(finalObj, old);
       };
       if (this.schema) {
-        const maybeResult = this.schema["~standard"].validate(finalObj);
-        const checkResult = (result) => {
+        schemaValidate(this.schema, finalObj, setAndPublish, (failure) => {
           var _a4;
-          if (result.issues) {
-            (_a4 = this.onValidateFailure) == null ? void 0 : _a4.call(this, result);
-          } else {
-            setAndPublish();
-          }
-        };
-        if (maybeResult instanceof Promise) {
-          maybeResult.then(checkResult);
-        } else {
-          checkResult(maybeResult);
-        }
+          (_a4 = this.onValidateFailure) == null ? void 0 : _a4.call(this, failure);
+          onValidateFailure == null ? void 0 : onValidateFailure(failure);
+        });
       } else {
         setAndPublish();
       }
     }
-    update(update) {
+    update(update, onValidateFailure) {
       if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
-      if (typeof this.value !== "object") {
-      }
       const finalUpdate = typeof update === "function" ? update(this.value) : update;
-      this.set({ ...this.value, ...finalUpdate });
+      this.set({ ...this.value, ...finalUpdate }, onValidateFailure);
     }
     onValueChange(cb) {
       if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
@@ -604,45 +1002,43 @@
     }
   };
   var FormState = class extends State {
-    constructor(parent, t, initValuesOrLinkedState, options) {
-      const inputs = collectFormsInputs(t);
+    constructor(parent, inputShape, initValuesOrLinkedState, options) {
+      const inputs = collectFormsInputs(inputShape);
+      const processValidationFailure = (failure) => {
+        var _a4;
+        let anyPathHadIssue = false;
+        const pathsWithIssue = new Set(failure.issues.map((issue2) => standardSchemaPathToString(issue2.path)));
+        for (const [inputPath, input2] of inputs) {
+          if (input2 instanceof ExtendedFormInput) {
+            const hasIssue = pathsWithIssue.has(inputPath);
+            if (hasIssue) {
+              anyPathHadIssue = true;
+            }
+            input2.callOnErrors(!pathsWithIssue.has(inputPath));
+          }
+        }
+        (_a4 = options == null ? void 0 : options.onError) == null ? void 0 : _a4.call(options, { isOk: anyPathHadIssue && !pathsWithIssue.has("") });
+      };
       if (initValuesOrLinkedState instanceof State) {
-        const initState = initValuesOrLinkedState.get();
+        const sourceValuesForInputs = initValuesOrLinkedState.get();
         const init = {};
-        inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
+        inputs.forEach(([path]) => setByPath(init, path, getByPath(sourceValuesForInputs, path)));
         super(parent, init, options);
-        this.configureInputs(this, inputs);
-        this.onValueChange((newState) => {
-          initValuesOrLinkedState.update(newState);
+        configureInputInitialValuesListeners(this, inputs);
+        this.onValueChange((inputValueStateThatPassSchemaValidate) => {
+          initValuesOrLinkedState.update(inputValueStateThatPassSchemaValidate, processValidationFailure);
         });
       } else {
         super(parent, initValuesOrLinkedState, options);
         if (this.schema) {
-          const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "input values" });
-          validInputValuesState.onValueChange((newState) => {
-            this.set(newState);
+          const inputValuesState = this.createState(initValuesOrLinkedState, { name: "input values" });
+          inputValuesState.onValueChange((newState) => {
+            this.update(newState, processValidationFailure);
           });
-          this.configureInputs(validInputValuesState, inputs);
+          configureInputInitialValuesListeners(inputValuesState, inputs);
         } else {
-          this.configureInputs(this, inputs);
+          configureInputInitialValuesListeners(this, inputs);
         }
-      }
-    }
-    configureInputs(inputState, inputs) {
-      for (const [path, input2] of inputs) {
-        const state = inputState.get();
-        const value = getByPath(state, path);
-        if (input2.node instanceof HTMLInputElement) {
-          input2.node.value = value;
-        }
-        inputState.addDomEvent(path, input2.node, input2.key, (ev) => {
-          const value2 = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
-          if (input2.validate && !input2.validate(value2, input2.node, ev)) {
-            return;
-          }
-          const newState = copyAndSet(inputState.get(), path, value2);
-          inputState.set(newState);
-        });
       }
     }
     onsubmit(root, listener, options) {
@@ -665,337 +1061,6 @@
   var createController = defaultContext.createController.bind(defaultContext);
   var createState = defaultContext.createState.bind(defaultContext);
   var createForm = defaultContext.createForm.bind(defaultContext);
-
-  // src/domBuilderEvents.ts
-  var Events = class {
-    constructor(events2) {
-      this.events = events2;
-    }
-  };
-  function events(events2) {
-    return new Events(events2 instanceof Events || "events" in events2 ? events2.events : events2);
-  }
-  function setEvents(node, arg) {
-    const ev = arg instanceof Events ? arg : events(arg);
-    Object.entries(ev.events).forEach(([key, fn]) => {
-      node.addEventListener(key, (event) => {
-        fn == null ? void 0 : fn({ node, event });
-      });
-    });
-  }
-
-  // src/domBuilderStyles.ts
-  function setClass(element, argValue) {
-    const classList = element.classList;
-    const visit = (argValue2) => {
-      if (Array.isArray(argValue2)) {
-        argValue2.forEach((arg) => visit(arg));
-      } else {
-        classList.add(...argValue2.split(" "));
-      }
-    };
-    visit(argValue);
-  }
-  function styles(...inputs) {
-    const flat = {};
-    for (const input2 of Array.from(inputs).flat()) {
-      if (input2 instanceof Styles) {
-        Object.assign(flat, input2.styles);
-      } else {
-        Object.assign(flat, input2);
-      }
-    }
-    return new Styles(flat);
-  }
-  var Styles = class {
-    constructor(styles2) {
-      this.styles = styles2;
-    }
-  };
-  var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
-    // common layout/size props
-    "width",
-    "height",
-    "top",
-    "left",
-    "right",
-    "bottom",
-    "minWidth",
-    "minHeight",
-    "maxWidth",
-    "maxHeight",
-    "margin",
-    "marginTop",
-    "marginBottom",
-    "marginLeft",
-    "marginRight",
-    "padding",
-    "paddingTop",
-    "paddingBottom",
-    "paddingLeft",
-    "paddingRight",
-    "gap",
-    "rowGap",
-    "columnGap",
-    "fontSize",
-    "borderWidth",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "borderRadius",
-    "outlineWidth",
-    "letterSpacing",
-    "lineHeight"
-  ]);
-  function convertPrimitiveValue(prop, val) {
-    if (val === null || val === void 0) return "";
-    if (typeof val === "number") {
-      if (prop.startsWith("--")) return String(val);
-      if (UNIT_PX_PROPS.has(prop)) return `${val}px`;
-      return String(val);
-    }
-    return String(val);
-  }
-  function convertArrayValue(prop, arr) {
-    const flat = [];
-    for (const v of arr) {
-      if (Array.isArray(v)) {
-        for (const vv of v) flat.push(vv);
-      } else {
-        flat.push(v);
-      }
-    }
-    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
-    return parts.join(", ");
-  }
-  function setStyle(el, ...inputs) {
-    for (const style2 of inputs) {
-      for (const key in style2) {
-        if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
-        const raw = style2[key];
-        if (isDefined(raw)) {
-          if (key.startsWith("--")) {
-            if (Array.isArray(raw)) {
-              const val = convertArrayValue(key, raw);
-              el.style.setProperty(key, val);
-            } else {
-              const val = convertPrimitiveValue(key, raw);
-              el.style.setProperty(key, val);
-            }
-            continue;
-          }
-          let finalValue;
-          if (Array.isArray(raw)) {
-            finalValue = convertArrayValue(key, raw);
-          } else {
-            finalValue = convertPrimitiveValue(key, raw);
-          }
-          el.style[key] = finalValue;
-        }
-      }
-    }
-  }
-
-  // src/types.ts
-  var WrappedNode = class {
-    constructor(node) {
-      this.node = node;
-    }
-  };
-
-  // src/domBuilder.ts
-  function addItems(element, ...args) {
-    args.forEach((arg) => {
-      if (Array.isArray(arg)) {
-        addItems(element, ...arg);
-      } else if (isNode(arg)) {
-        element.appendChild(arg);
-      } else if (arg instanceof WrappedNode) {
-        element.appendChild(arg.node);
-      } else if (arg instanceof Styles) {
-        setStyle(element, arg.styles);
-      } else if (arg instanceof Events) {
-        setEvents(element, arg);
-      } else if (typeof arg === "string") {
-        element.appendChild(getDocument().createTextNode(arg));
-      } else if (typeof arg === "object") {
-        Object.entries(arg).forEach(([key, argValue]) => {
-          if (key === "class") {
-            setClass(element, argValue);
-          } else if (key === "styles") {
-            setStyle(element, argValue);
-          } else if (key === "events") {
-            setEvents(element, argValue);
-          } else if (key.startsWith("on") && typeof argValue === "function") {
-            const event = key.substring(2).toLowerCase();
-            element.addEventListener(event, argValue);
-          } else {
-            element.setAttribute(key, argValue);
-          }
-        });
-      }
-    });
-  }
-  var doc = typeof document !== "undefined" ? document : void 0;
-  var isNode = (e) => {
-    return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
-  };
-  function getDocument() {
-    if (doc) {
-      return doc;
-    }
-    throw new Error("document is undefined");
-  }
-  function createElement(tagName, ...args) {
-    const element = getDocument().createElement(tagName);
-    addItems(element, ...args);
-    return element;
-  }
-  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
-  var a = createElementFn("a");
-  var abbr = createElementFn("abbr");
-  var address = createElementFn("address");
-  var area = createElementFn("area");
-  var article = createElementFn("article");
-  var aside = createElementFn("aside");
-  var audio = createElementFn("audio");
-  var b = createElementFn("b");
-  var base = createElementFn("base");
-  var bdi = createElementFn("bdi");
-  var bdo = createElementFn("bdo");
-  var blockquote = createElementFn("blockquote");
-  var body = createElementFn("body");
-  var br = createElementFn("br");
-  var button = createElementFn("button");
-  var canvas = createElementFn("canvas");
-  var caption = createElementFn("caption");
-  var cite = createElementFn("cite");
-  var code = createElementFn("code");
-  var col = createElementFn("col");
-  var colgroup = createElementFn("colgroup");
-  var data = createElementFn("data");
-  var datalist = createElementFn("datalist");
-  var dd = createElementFn("dd");
-  var del = createElementFn("del");
-  var details = createElementFn("details");
-  var dfn = createElementFn("dfn");
-  var dialog = createElementFn("dialog");
-  var div = createElementFn("div");
-  var dl = createElementFn("dl");
-  var dt = createElementFn("dt");
-  var em = createElementFn("em");
-  var embed = createElementFn("embed");
-  var fieldset = createElementFn("fieldset");
-  var figcaption = createElementFn("figcaption");
-  var figure = createElementFn("figure");
-  var footer = createElementFn("footer");
-  var form = createElementFn("form");
-  var h1 = createElementFn("h1");
-  var h2 = createElementFn("h2");
-  var h3 = createElementFn("h3");
-  var h4 = createElementFn("h4");
-  var h5 = createElementFn("h5");
-  var h6 = createElementFn("h6");
-  var head = createElementFn("head");
-  var header = createElementFn("header");
-  var hgroup = createElementFn("hgroup");
-  var hr = createElementFn("hr");
-  var html = createElementFn("html");
-  var i = createElementFn("i");
-  var iframe = createElementFn("iframe");
-  var img = createElementFn("img");
-  var input = createElementFn("input");
-  var ins = createElementFn("ins");
-  var kbd = createElementFn("kbd");
-  var label = createElementFn("label");
-  var legend = createElementFn("legend");
-  var li = createElementFn("li");
-  var link = createElementFn("link");
-  var main = createElementFn("main");
-  var map = createElementFn("map");
-  var mark = createElementFn("mark");
-  var menu = createElementFn("menu");
-  var meta = createElementFn("meta");
-  var meter = createElementFn("meter");
-  var nav = createElementFn("nav");
-  var noscript = createElementFn("noscript");
-  var object = createElementFn("object");
-  var ol = createElementFn("ol");
-  var optgroup = createElementFn("optgroup");
-  var option = createElementFn("option");
-  var output = createElementFn("output");
-  var p = createElementFn("p");
-  var picture = createElementFn("picture");
-  var pre = createElementFn("pre");
-  var progress = createElementFn("progress");
-  var q = createElementFn("q");
-  var rp = createElementFn("rp");
-  var rt = createElementFn("rt");
-  var ruby = createElementFn("ruby");
-  var s = createElementFn("s");
-  var samp = createElementFn("samp");
-  var script = createElementFn("script");
-  var search = createElementFn("search");
-  var section = createElementFn("section");
-  var select = createElementFn("select");
-  var slot = createElementFn("slot");
-  var small = createElementFn("small");
-  var source = createElementFn("source");
-  var span = createElementFn("span");
-  var strong = createElementFn("strong");
-  var style = createElementFn("style");
-  var sub = createElementFn("sub");
-  var summary = createElementFn("summary");
-  var sup = createElementFn("sup");
-  var table = createElementFn("table");
-  var tbody = createElementFn("tbody");
-  var td = createElementFn("td");
-  var template = createElementFn("template");
-  var textarea = createElementFn("textarea");
-  var tfoot = createElementFn("tfoot");
-  var th = createElementFn("th");
-  var thead = createElementFn("thead");
-  var time = createElementFn("time");
-  var title = createElementFn("title");
-  var tr = createElementFn("tr");
-  var track = createElementFn("track");
-  var u = createElementFn("u");
-  var ul = createElementFn("ul");
-  var varE = createElementFn("var");
-  var video = createElementFn("video");
-  var wbr = createElementFn("wbr");
-  var text = (arg = "") => getDocument().createTextNode(String(arg));
-  var createInputFn = (type) => (...args) => createElement("input", { type }, ...args);
-  var inputButton = createInputFn("button");
-  var checkbox = createInputFn("checkbox");
-  var color = createInputFn("color");
-  var date = createInputFn("date");
-  var datetimeLocal = createInputFn("datetime-local");
-  var email = createInputFn("email");
-  var hidden = createInputFn("hidden");
-  var image = createInputFn("image");
-  var month = createInputFn("month");
-  var number = createInputFn("number");
-  var password = createInputFn("password");
-  var radio = createInputFn("radio");
-  var range = createInputFn("range");
-  var reset = createInputFn("reset");
-  var inputSearch = createInputFn("search");
-  var submit = createInputFn("submit");
-  var tel = createInputFn("tel");
-  var inputText = createInputFn("text");
-  var inputTime = createInputFn("time");
-  var url = createInputFn("url");
-  var week = createInputFn("week");
-  function setElementToId(targetId, element) {
-    const targetElement = getDocument().getElementById(targetId);
-    if (targetElement) {
-      targetElement.replaceChildren(element);
-    } else {
-      console.error(`Target element with ID "${targetId}" not found!`);
-    }
-  }
 
   // src/demos/01_domBuilderStateDemo.ts
   function domBuilderWithState() {
@@ -1211,7 +1276,7 @@
     null: () => _null3,
     nullable: () => nullable,
     nullish: () => nullish2,
-    number: () => number3,
+    number: () => number2,
     object: () => object2,
     optional: () => optional,
     overwrite: () => _overwrite,
@@ -2541,7 +2606,7 @@
     md5_hex: () => md5_hex,
     nanoid: () => nanoid,
     null: () => _null,
-    number: () => number2,
+    number: () => number,
     rfc5322Email: () => rfc5322Email,
     sha1_base64: () => sha1_base64,
     sha1_base64url: () => sha1_base64url,
@@ -2634,7 +2699,7 @@
   };
   var bigint = /^-?\d+n?$/;
   var integer = /^-?\d+$/;
-  var number2 = /^-?\d+(?:\.\d+)?/;
+  var number = /^-?\d+(?:\.\d+)?/;
   var boolean = /^(?:true|false)$/i;
   var _null = /^null$/i;
   var _undefined = /^undefined$/i;
@@ -3724,7 +3789,7 @@
   var $ZodNumber = /* @__PURE__ */ $constructor("$ZodNumber", (inst, def) => {
     var _a4;
     $ZodType.init(inst, def);
-    inst._zod.pattern = (_a4 = inst._zod.bag.pattern) != null ? _a4 : number2;
+    inst._zod.pattern = (_a4 = inst._zod.bag.pattern) != null ? _a4 : number;
     inst._zod.parse = (payload, _ctx) => {
       if (def.coerce)
         try {
@@ -8447,8 +8512,8 @@
   var capitalizeFirstCharacter = (text2) => {
     return text2.charAt(0).toUpperCase() + text2.slice(1);
   };
-  function getUnitTypeFromNumber(number5) {
-    const abs = Math.abs(number5);
+  function getUnitTypeFromNumber(number4) {
+    const abs = Math.abs(number4);
     const last = abs % 10;
     const last2 = abs % 100;
     if (last2 >= 11 && last2 <= 19 || last === 0)
@@ -13114,7 +13179,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     null: () => _null3,
     nullable: () => nullable,
     nullish: () => nullish2,
-    number: () => number3,
+    number: () => number2,
     object: () => object2,
     optional: () => optional,
     partialRecord: () => partialRecord,
@@ -13630,7 +13695,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     inst.isFinite = true;
     inst.format = (_i = bag.format) != null ? _i : null;
   });
-  function number3(params) {
+  function number2(params) {
     return _number(ZodNumber, params);
   }
   var ZodNumberFormat = /* @__PURE__ */ $constructor("ZodNumberFormat", (inst, def) => {
@@ -14330,7 +14395,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }, ...args);
   function json(params) {
     const jsonSchema = lazy(() => {
-      return union([string2(params), number3(), boolean2(), _null3(), array(jsonSchema), record(string2(), jsonSchema)]);
+      return union([string2(params), number2(), boolean2(), _null3(), array(jsonSchema), record(string2(), jsonSchema)]);
     });
     return jsonSchema;
   }
@@ -14751,13 +14816,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     bigint: () => bigint3,
     boolean: () => boolean3,
     date: () => date5,
-    number: () => number4,
+    number: () => number3,
     string: () => string3
   });
   function string3(params) {
     return _coercedString(ZodString, params);
   }
-  function number4(params) {
+  function number3(params) {
     return _coercedNumber(ZodNumber, params);
   }
   function boolean3(params) {
@@ -14821,47 +14886,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // src/demos/04_formDemo.ts
+  var divisibleBy = (divisor) => external_exports.coerce.number().refine(
+    (n) => {
+      console.log("divisibleBy", divisor, n, Number.isInteger(n) && n % divisor === 0);
+      return Number.isInteger(n) && n % divisor === 0;
+    },
+    {
+      message: `Must be a number divisible by ${divisor}`
+    }
+  );
   function createFormStateDemo(init = { a: 23, b: 10 }) {
-    const i1 = input();
-    const i2 = input();
+    const logError = { onError: ({ isOk, node }) => log(`${node == null ? void 0 : node.name} is ok: ${isOk}`) };
+    const a2 = inputNumber(logError);
+    const b2 = inputNumber(logError);
     const info = pre();
-    const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+    const root = form("Input 1", a2, "Input 2", b2, input({ type: "submit", value: "Submit" }), info);
     const log = (s2) => info.append(`${s2}
 `);
-    const isDividable = (prefix, divider) => {
-      return (n) => {
-        const isOk = n % divider === 0;
-        if (isOk) {
-          return true;
-        }
-        log(`${prefix} ${n} is not dividable by ${divider}`);
-        return false;
-      };
-    };
     const formData = createForm(
       {
-        a: formEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
-        b: formEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5))
+        a: a2,
+        b: b2
       },
       init,
       {
-        validate: ({ a: a2, b: b2 }) => {
-          const isOk = a2 + b2 === 15;
-          if (isOk) {
-            log(`Form full state validation: ${a2} + ${b2}=${a2 + b2} is 15!`);
-            return true;
+        schema: external_exports.object({ a: divisibleBy(10), b: divisibleBy(5) }).superRefine((data2, ctx) => {
+          if (data2.a + data2.b !== 15) {
+            ctx.addIssue({ code: "invalid_value", values: [data2.a, data2.b, 15], path: [""] });
           }
-          log(`Form full state validation : ${a2} + ${b2}=${a2 + b2} is not 15`);
-          return false;
-        }
+        }),
+        onError: ({ isOk }) => log(`Main object validate is ok: ${isOk}`)
       }
     );
-    formData.onValueChange(({ a: a2, b: b2 }) => {
-      log(`Form data set to: a:${a2} b:${b2}`);
+    formData.onValueChange(({ a: a3, b: b3 }) => {
+      log(`Form data set to: a:${a3} b:${b3}`);
     });
     formData.onsubmit(root, () => {
-      const { a: a2, b: b2 } = formData.get();
-      log(`Form submitted ${a2} ${b2}`);
+      const { a: a3, b: b3 } = formData.get();
+      log(`Form submitted ${a3} ${b3}`);
     });
     formData.updateUi();
     return root;

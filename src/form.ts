@@ -1,49 +1,56 @@
-export class FormsInput<N extends Node, K extends keyof HTMLElementEventMap, V = string> {
-  constructor(
-    public node: N,
-    public key: K,
-    public map?: (value: string) => V,
-    public validate?: (value: V, node: N, ev: HTMLElementEventMap[K]) => boolean,
-  ) {}
-}
+import {ExtendedFormInput} from "./domBuilder";
+import {isDefined, isInstanceOfAny} from "./util/typeUtils";
+import {getByPath} from "./util/getByPath";
+import {copyAndSet} from "./util/setByPath";
+import {State} from "./state";
+import {schemaValidate} from "./util/standardSchemaUtil";
 
-// ---------- MapReturn: prefer explicit `.map`, then FormsInput's V, then string ----------
-type MapReturn<T> =
-  // object-literal with a `.map` function (highest priority for direct literals)
-  T extends { map: (v: string) => infer R }
-    ? R
-    : // if T is already a FormsInput generic, extract V
-      T extends FormsInput<any, any, infer V>
-      ? V
-      : // fallback
-        string;
+type InputElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 
-// ---------- Recursive mapping: InputTree -> State shape ----------
-export type StateFromInputTree<T> =
-  // leaf node
-  T extends FormsInput<any, any, any>
-    ? MapReturn<T>
-    : // recursive object
-      { [K in keyof T]: StateFromInputTree<T[K]> };
+// An Input leaf is a DOM element or your ExtendedFormInput wrapper
+type InputLeaf = InputElement | ExtendedFormInput<InputElement>;
 
-export function formEvent<N extends Node, K extends keyof HTMLElementEventMap, V = string>(
-  node: N,
-  key: K,
-  map: (value: string) => V,
-  validate?: (value: V, node: N, ev: HTMLElementEventMap[K]) => boolean,
-) {
-  return new FormsInput(node, key, map, validate);
-}
+// Recursive InputShape: leaf | array | object map
+export type InputShape =
+  | InputLeaf
+  | InputShape[] // array of recursive shape
+  | { [key: string]: InputShape };
 
-export type PathTuple = [path: string, input: FormsInput<any, any, any>];
+type InitFromInputShape<T> =
+  T extends InputLeaf ? string :
+    T extends readonly (infer U)[] ? InitFromInputShape<U>[] :
+      T extends object ? { [K in keyof T]: InitFromInputShape<T[K]> } :
+        never;
+
+type HasSchema<S> = [S] extends [never] ? false : true;
+
+export type InitValue<
+  IS extends InputShape,
+  SchemaOutput
+> =
+  HasSchema<SchemaOutput> extends true
+    ? SchemaOutput
+    : InitFromInputShape<IS>;
+
+export type LinkedState<
+  IS extends InputShape,
+  SchemaOutput
+> =
+  State<
+    Partial<InitValue<IS, SchemaOutput>> & Record<string, any>
+  >;
+
+
+export type PathTuple = [path: string, input: InputElement | ExtendedFormInput<InputElement>];
+const htmlFormInputClasses = [HTMLInputElement, HTMLSelectElement, HTMLTextAreaElement]
 
 export function collectFormsInputs(root: unknown): PathTuple[] {
   const out: PathTuple[] = [];
 
   function visit(node: any, pathParts: (string | number)[]) {
-    if (node == null) return;
+    if (!isDefined(node)) return;
 
-    if (node instanceof FormsInput) {
+    if (isInstanceOfAny(node, htmlFormInputClasses) || node instanceof ExtendedFormInput && isInstanceOfAny(node.node, htmlFormInputClasses)) {
       // join path parts into dotted path; numbers become indices
       const path = pathParts.map((p) => String(p)).join(".");
       out.push([path, node]);
@@ -71,18 +78,43 @@ export function collectFormsInputs(root: unknown): PathTuple[] {
   return out;
 }
 
-export function formInput<N extends Node, K extends keyof HTMLElementEventMap, V = string>(
-  node: N,
-  key: K,
-  map: (value: string) => V,
-  validate?: (value: V, node: N, ev: HTMLElementEventMap[K]) => boolean,
-) {
-  return new FormsInput(node, key, map, validate);
-}
-
 // convenience to read raw value
 export function readRaw(node: Node): string {
   const anyNode = node as any;
   if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
   return String((node as Element).textContent ?? "");
 }
+
+export function configureInputInitialValuesListeners(inputState: State<any>, inputs: PathTuple[]) {
+  for (const [path, input] of inputs) {
+    const stateValue = inputState.get();
+    const inputValue = getByPath(stateValue, path);
+    const extendedFormInput = input instanceof ExtendedFormInput ? input : undefined
+    const node = input instanceof ExtendedFormInput ? input.node : input
+    // set init value to nodes
+    if (node instanceof HTMLInputElement || node instanceof HTMLSelectElement || node instanceof HTMLTextAreaElement) {
+      node.name = path
+      node.value = inputValue as any
+    }
+    inputState.addDomEvent(path, node, extendedFormInput?.event || "change", (ev: Event) => {
+      const value = readRaw(node);
+
+      const setValue = () => {
+        const newState = copyAndSet(inputState.get(), path, value);
+        inputState.set(newState);
+      };
+
+      if (extendedFormInput && extendedFormInput.schema && extendedFormInput.onErrors) {
+        schemaValidate(extendedFormInput.schema, value, () => {
+          extendedFormInput.callOnErrors(false)
+          setValue()
+        }, () => {
+          extendedFormInput.callOnErrors(true);
+        });
+      } else {
+        setValue();
+      }
+    });
+  }
+}
+

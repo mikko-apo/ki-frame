@@ -1,49 +1,48 @@
-import { createForm } from "..";
-import { form, input, pre } from "../domBuilder";
-import { formEvent } from "../form";
+import {z} from "zod";
+import {createForm} from "..";
+import {ExtendedFormAttributes, form, input, inputNumber, pre} from "../domBuilder";
 
-export function createFormStateDemo(init = { a: 23, b: 10 }) {
+const divisibleBy = (divisor: number) =>
+  z.coerce.number().refine(
+    (n) => {
+      console.log("divisibleBy", divisor, n, Number.isInteger(n) && n % divisor === 0)
+      return Number.isInteger(n) && n % divisor === 0;
+    },
+    {
+      message: `Must be a number divisible by ${divisor}`,
+    },
+  );
+
+export function createFormStateDemo(init = {a: 23, b: 10}) {
   // define dom elements
-  const i1 = input();
-  const i2 = input();
+  const logError: ExtendedFormAttributes = {onError: ({isOk, node}) => log(`${node?.name} is ok: ${isOk}`)};
+  const a = inputNumber(logError);
+  const b = inputNumber(logError);
   const info = pre();
-  const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+  const root = form("Input 1", a, "Input 2", b, input({type: "submit", value: "Submit"}), info);
 
   const log = (s: string) => info.append(`${s}\n`);
 
-  const isDividable = (prefix: string, divider: number): ((n: number) => boolean) => {
-    return (n: number) => {
-      const isOk = n % divider === 0;
-      if (isOk) {
-        return true;
-      }
-      log(`${prefix} ${n} is not dividable by ${divider}`);
-      return false;
-    };
-  };
   const formData = createForm(
     {
-      a: formEvent(i1, "keyup", (s) => Number(s), isDividable("a", 10)),
-      b: formEvent(i2, "keyup", (s) => Number(s), isDividable("b", 5)),
+      a,
+      b,
     },
     init,
     {
-      validate: ({ a, b }) => {
-        const isOk = a + b === 15;
-        if (isOk) {
-          log(`Form full state validation: ${a} + ${b}=${a + b} is 15!`);
-          return true;
+      schema: z.object({a: divisibleBy(10), b: divisibleBy(5)}).superRefine((data, ctx) => {
+        if (data.a + data.b !== 15) {
+          ctx.addIssue({code: "invalid_value", values: [data.a, data.b, 15], path: [""]});
         }
-        log(`Form full state validation : ${a} + ${b}=${a + b} is not 15`);
-        return false;
-      },
+      }),
+      onError: ({isOk}) => log(`Main object validate is ok: ${isOk}`)
     },
   );
-  formData.onValueChange(({ a, b }) => {
+  formData.onValueChange(({a, b}) => {
     log(`Form data set to: a:${a} b:${b}`);
   });
   formData.onsubmit(root, () => {
-    const { a, b } = formData.get();
+    const {a, b} = formData.get();
     log(`Form submitted ${a} ${b}`);
   });
 

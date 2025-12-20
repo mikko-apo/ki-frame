@@ -1,6 +1,6 @@
-import { Channel, type Unsub, type UnwrapMaybeTuple } from "./channel";
-import type { ErrorResponse, FetchOptions } from "./fetch";
-import { collectFormsInputs, type PathTuple, readRaw, type StateFromInputTree } from "./form";
+import {Channel, type Unsub, type UnwrapMaybeTuple} from "./channel";
+import type {FetchOptions} from "./fetch";
+import {collectFormsInputs, configureInputInitialValuesListeners, InitValue, InputShape, LinkedState,} from "./form";
 import {
   type CallbackInfo,
   type Destroyable,
@@ -8,13 +8,15 @@ import {
   PromiseDestroy,
   TimeoutDestroyable,
 } from "./promiseDestroy";
-import type { DestroyCb, EventSource } from "./types";
-import { getByPath } from "./util/getByPath";
-import { createId } from "./util/objectIdCounter";
-import { copyAndSet, setByPath } from "./util/setByPath";
-import type { StandardSchemaV1 } from "./util/standardSchema";
-import { DestroyableSet } from "./util/strongOrWeakSet";
-import { isDefined } from "./util/typeUtils";
+import type {DestroyCb, EventSource} from "./types";
+import {getByPath} from "./util/getByPath";
+import {createId} from "./util/objectIdCounter";
+import {setByPath} from "./util/setByPath";
+import type {StandardSchemaV1} from "./util/standardSchema";
+import {DestroyableSet} from "./util/strongOrWeakSet";
+import {isDefined} from "./util/typeUtils";
+import {schemaValidate, standardSchemaPathToString} from "./util/standardSchemaUtil";
+import {ExtendedFormInput, OnErrorFn} from "./domBuilder";
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b;
@@ -25,9 +27,15 @@ export interface ControllerOptions {
   weakRef: boolean;
 }
 
-export interface StateOptions<S> extends Partial<ControllerOptions> {
-  schema?: StandardSchemaV1<unknown, S>;
-  onValidateFailure?: (failure: StandardSchemaV1.FailureResult) => void;
+type OnValidationFailure = (failure: StandardSchemaV1.FailureResult) => void;
+
+export interface StateOptions<SchemaOutput = never> extends Partial<ControllerOptions> {
+  // schema can be used by any state
+  schema?: StandardSchemaV1<unknown, SchemaOutput>;
+  // onValidateFailure can be used by any state
+  onValidateFailure?: OnValidationFailure;
+  // onError is used by FormState
+  onError?: OnErrorFn;
 }
 
 type ControllerDefaultEventShapes = [Readonly<{ type: "updateUi" }>];
@@ -53,7 +61,8 @@ export class Context implements Destroyable {
   constructor(
     public readonly parent?: Context,
     public readonly controllers = new DestroyableSet<Context>("weak"),
-  ) {}
+  ) {
+  }
 
   createController(options?: ControllerOptions) {
     const controller = new Controller(this, options);
@@ -67,12 +76,14 @@ export class Context implements Destroyable {
     return state;
   }
 
-  createForm<T extends Record<string, any>, Linked extends StateFromInputTree<T> = StateFromInputTree<T>>(
-    t: T,
-    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
-    options?: StateOptions<StateFromInputTree<T>>,
-  ): FormState<T> {
-    const form = new FormState(this, t, initValuesOrLinkedState, options);
+  createForm<IS extends InputShape, SchemaOutput = never>(
+    inputShape: IS,
+    initValuesOrLinkedState:
+      | InitValue<IS, SchemaOutput>
+      | LinkedState<IS, SchemaOutput>,
+    options?: StateOptions<InitValue<IS, SchemaOutput>>
+  ) {
+    const form = new FormState(this, inputShape, initValuesOrLinkedState, options);
     this.controllers.add(form);
     return form;
   }
@@ -95,8 +106,8 @@ export class Controller extends Context {
 
   constructor(parent: Context, options?: Partial<ControllerOptions>) {
     super(parent, new DestroyableSet<Context>());
-    const { name = "state", weakRef = false } = options ?? {};
-    this.options = { name, weakRef };
+    const {name = "state", weakRef = false} = options ?? {};
+    this.options = {name, weakRef};
     this._stateId = createId(name);
   }
 
@@ -127,7 +138,7 @@ export class Controller extends Context {
 
   updateUi() {
     if (this.outputChannel) {
-      this.outputChannel.publish({ type: "updateUi" });
+      this.outputChannel.publish({type: "updateUi"});
     }
   }
 
@@ -137,7 +148,7 @@ export class Controller extends Context {
   }
 
   addLinkedState<V extends Controller>(controller: V, options?: LinkControllerOptions): Unsub {
-    const value = { controller, ...(options || {}) };
+    const value = {controller, ...(options || {})};
     this.linkedStates.add(value);
     return () => this.linkedStates.delete(value);
   }
@@ -146,7 +157,8 @@ export class Controller extends Context {
     if (typeof target === "function") {
       if (this.destroyed) {
         target();
-        return () => {};
+        return () => {
+        };
       }
       const info: CallbackInfo = {
         type: "function",
@@ -157,7 +169,8 @@ export class Controller extends Context {
     } else {
       if (this.destroyed) {
         target.destroy();
-        return () => {};
+        return () => {
+        };
       }
       return this.onDestroyListeners.add(target);
     }
@@ -240,7 +253,7 @@ export class Controller extends Context {
       map?: (res: Promise<Response>) => T | Promise<T>;
     },
   ): PromiseDestroy<T> | PromiseDestroy<Response> {
-    const { timeoutMs, map, assertOk = true, ...fetchInit } = fetchOptions ?? {};
+    const {timeoutMs, map, assertOk = true, ...fetchInit} = fetchOptions ?? {};
     const createAbortController = (destroy: Unsub): [AbortController, Unsub] => {
       const abortController = new AbortController();
       const destroyAbortController = () => {
@@ -256,15 +269,14 @@ export class Controller extends Context {
       ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
       : [];
 
-    const response = fetch(url, { ...fetchInit, signal: abortController?.signal });
+    const response = fetch(url, {...fetchInit, signal: abortController?.signal});
     const maybeOkResponse = assertOk
       ? response.then((response: Response): Response => {
-          if ((typeof assertOk === "function" && assertOk(response) === false) || !response.ok) {
-            const cause: ErrorResponse = { errorResponse: response };
-            throw cause;
-          }
-          return response;
-        })
+        if ((typeof assertOk === "function" && assertOk(response) === false) || !response.ok) {
+          throw {errorResponse: response};
+        }
+        return response;
+      })
       : response;
 
     // destroy() is called when state.destroy() has been called
@@ -293,7 +305,7 @@ export class State<Value> extends Controller {
   public value: Value;
   private onChange?: Channel<[Readonly<Value>, Readonly<Value>]>;
   protected schema?: StandardSchemaV1<unknown, Value>;
-  private onValidateFailure?: (failure: StandardSchemaV1.FailureResult) => void;
+  private onValidateFailure?: OnValidationFailure;
 
   constructor(parent: Context, initialValue: Value, options?: StateOptions<Value>) {
     super(parent, options);
@@ -314,7 +326,7 @@ export class State<Value> extends Controller {
     return this.onChange;
   }
 
-  set(newObj: Value | ((cur: Value) => Value)) {
+  set(newObj: Value | ((cur: Value) => Value), onValidateFailure?: OnValidationFailure) {
     if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
     const old = this.value;
     const finalObj: Value = typeof newObj === "function" ? (newObj as (cur: Value) => Value)(this.value) : newObj;
@@ -324,31 +336,20 @@ export class State<Value> extends Controller {
       this.getOnChange().publish(finalObj, old);
     };
     if (this.schema) {
-      const maybeResult = this.schema["~standard"].validate(finalObj);
-      const checkResult = (result: StandardSchemaV1.Result<Value>) => {
-        if (result.issues) {
-          this.onValidateFailure?.(result);
-        } else {
-          setAndPublish();
-        }
-      };
-      if (maybeResult instanceof Promise) {
-        maybeResult.then(checkResult);
-      } else {
-        checkResult(maybeResult);
-      }
+      schemaValidate(this.schema, finalObj, setAndPublish, (failure) => {
+        this.onValidateFailure?.(failure);
+        onValidateFailure?.(failure);
+      })
     } else {
       setAndPublish();
     }
   }
 
-  update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>)) {
+  update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>), onValidateFailure?: OnValidationFailure) {
     if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
-    if (typeof this.value !== "object") {
-    }
     const finalUpdate =
       typeof update === "function" ? (update as (cur: Value) => Value | Partial<Value>)(this.value) : update;
-    this.set({ ...this.value, ...finalUpdate });
+    this.set({...this.value, ...finalUpdate}, onValidateFailure);
   }
 
   onValueChange(cb: (obj: Value, old: Value) => void): Unsub {
@@ -363,54 +364,60 @@ export class State<Value> extends Controller {
 }
 
 export class FormState<
-  T extends Record<string, any>,
-  Linked extends StateFromInputTree<T> = StateFromInputTree<T>,
-> extends State<StateFromInputTree<T>> {
+  IS extends InputShape,
+  SchemaOutput = never
+> extends State<InitValue<IS, SchemaOutput>> {
   constructor(
     parent: Context,
-    t: T,
-    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
-    options?: StateOptions<StateFromInputTree<T>>,
+    inputShape: IS,
+    initValuesOrLinkedState:
+      | InitValue<IS, SchemaOutput>
+      | LinkedState<IS, SchemaOutput>,
+    options?: StateOptions<InitValue<IS, SchemaOutput>>
   ) {
-    const inputs = collectFormsInputs(t);
+    const inputs = collectFormsInputs(inputShape);
+    const processValidationFailure: OnValidationFailure = failure => {
+      let anyPathHadIssue = false
+      const pathsWithIssue = new Set(failure.issues.map(issue => standardSchemaPathToString(issue.path)));
+      for (const [inputPath, input] of inputs) {
+        if (input instanceof ExtendedFormInput) {
+          const hasIssue = pathsWithIssue.has(inputPath)
+          if(hasIssue) {
+            anyPathHadIssue = true
+          }
+          input.callOnErrors(!pathsWithIssue.has(inputPath))
+        }
+      }
+      options?.onError?.({isOk: anyPathHadIssue && !pathsWithIssue.has("")})
+    }
     if (initValuesOrLinkedState instanceof State) {
-      const initState = initValuesOrLinkedState.get();
+      // this state will contain values from inputs. copy initial values from linkedState
+      const sourceValuesForInputs = initValuesOrLinkedState.get();
       const init = {};
-      inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
-      super(parent, init as StateFromInputTree<T>, options);
-      this.configureInputs(this, inputs);
-      this.onValueChange((newState) => {
-        initValuesOrLinkedState.update(newState);
+      inputs.forEach(([path]) => setByPath(init, path, getByPath(sourceValuesForInputs, path)));
+      // values for inputs copied, call super()
+      // TODO: there should be onValidationFailure for super if schema has been set, based on the input fields
+      super(parent, init as any, options);
+      configureInputInitialValuesListeners(this, inputs);
+      this.onValueChange((inputValueStateThatPassSchemaValidate) => {
+        // linkedState.update validationFailure should call processValidationFailure
+        initValuesOrLinkedState.update(inputValueStateThatPassSchemaValidate as any, processValidationFailure);
       });
     } else {
+      // if state.schema is defined for this state, create additional state for input values.
+      // TODO: update should include onValidationFailure, based on the input fields and their onError
       super(parent, initValuesOrLinkedState, options);
       if (this.schema) {
-        const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "input values" });
-        validInputValuesState.onValueChange((newState) => {
-          this.set(newState);
+        const inputValuesState = this.createState(initValuesOrLinkedState, {name: "input values"});
+        inputValuesState.onValueChange((newState) => {
+          // this.update validationFailure should call processValidationFailure
+          this.update(newState, processValidationFailure);
         });
-        this.configureInputs(validInputValuesState, inputs);
+        configureInputInitialValuesListeners(inputValuesState, inputs);
       } else {
-        this.configureInputs(this, inputs);
+        // input values are set directly to this state
+        configureInputInitialValuesListeners(this, inputs);
       }
-    }
-  }
-
-  private configureInputs(inputState: State<StateFromInputTree<T>>, inputs: PathTuple[]) {
-    for (const [path, input] of inputs) {
-      const state = inputState.get();
-      const value = getByPath(state, path);
-      if (input.node instanceof HTMLInputElement) {
-        input.node.value = value as any;
-      }
-      inputState.addDomEvent(path, input.node, input.key, (ev: Event) => {
-        const value = input.map ? input.map(readRaw(input.node)) : readRaw(input.node);
-        if (input.validate && !input.validate(value, input.node, ev)) {
-          return;
-        }
-        const newState = copyAndSet(inputState.get(), path, value);
-        inputState.set(newState);
-      });
     }
   }
 
