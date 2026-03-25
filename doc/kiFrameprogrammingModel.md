@@ -1,21 +1,22 @@
 <!-- TOC -->
-* [How is the code linked to DOM nodes in memory?](#how-is-the-code-linked-to-dom-nodes-in-memory)
-  * [Avoid: Top level const/let and setting value to window](#avoid-top-level-constlet-and-setting-value-to-window)
-* [GC strategies](#gc-strategies)
-* [Work in progress below this topic](#work-in-progress-below-this-topic)
-  * [State broadcast events](#state-broadcast-events)
-  * [State API](#state-api)
-  * [No external dependencies -> automatic clean up with GC](#no-external-dependencies---automatic-clean-up-with-gc)
-  * [Registered event sources and automatic cleanup on state.destroy()](#registered-event-sources-and-automatic-cleanup-on-statedestroy)
-  * [createState({}, {weakRef: true})) and state.withStrongRefs(strongRefState => {...})](#createstate-weakref-true-and-statewithstrongrefsstrongrefstate--)
-  * [Automatic cleanup](#automatic-cleanup)
-  * [Event propagation and state data sharing](#event-propagation-and-state-data-sharing)
-  * [Linked items](#linked-items)
-  * [State and DOM node life cycle events](#state-and-dom-node-life-cycle-events)
-    * [Pyramid shape for event propagation](#pyramid-shape-for-event-propagation)
-    * [Hierarchy and grouping](#hierarchy-and-grouping)
-  * [Sharing state data](#sharing-state-data)
-<!-- TOC -->
+
+- [How is the code linked to DOM nodes in memory?](#how-is-the-code-linked-to-dom-nodes-in-memory)
+  - [Avoid: Top level const/let and setting value to window](#avoid-top-level-constlet-and-setting-value-to-window)
+- [GC strategies](#gc-strategies)
+- [Work in progress below this topic](#work-in-progress-below-this-topic)
+  - [State broadcast events](#state-broadcast-events)
+  - [State API](#state-api)
+  - [No external dependencies -> automatic clean up with GC](#no-external-dependencies---automatic-clean-up-with-gc)
+  - [Registered event sources and automatic cleanup on state.destroy()](#registered-event-sources-and-automatic-cleanup-on-statedestroy)
+  - [createState({}, {weakRef: true})) and state.withStrongRefs(strongRefState => {...})](#createstate-weakref-true-and-statewithstrongrefsstrongrefstate--)
+  - [Automatic cleanup](#automatic-cleanup)
+  - [Event propagation and state data sharing](#event-propagation-and-state-data-sharing)
+  - [Linked items](#linked-items)
+  - [State and DOM node life cycle events](#state-and-dom-node-life-cycle-events)
+    - [Pyramid shape for event propagation](#pyramid-shape-for-event-propagation)
+    - [Hierarchy and grouping](#hierarchy-and-grouping)
+  - [Sharing state data](#sharing-state-data)
+  <!-- TOC -->
 
 # How is the code linked to DOM nodes in memory?
 
@@ -49,57 +50,57 @@ base so leaks can become substantial if the onChange() is subscribed frequently 
 
 Following approaches create references that can't be GCed, avoid:
 
-* top level javascript const/let: `<script> const obj = { foo: 123 }; </script>`
-* setting value to window: `window.state = { value: 1 };`
-* ES module top level const/let: `<script type="module">const myState = { foo: 1 };</script>` (if module is unloaded, GC
+- top level javascript const/let: `<script> const obj = { foo: 123 }; </script>`
+- setting value to window: `window.state = { value: 1 };`
+- ES module top level const/let: `<script type="module">const myState = { foo: 1 };</script>` (if module is unloaded, GC
   can work)
 
 # GC strategies
 
-* Local
-* Manual
-    * manual state.destroy()
-* Observer
-    * MutationObserver -> state.destroy()
-    * support reattach with delayed check
-* RefMode
-    * createState({..}, {weakRef: true})
-        * all links to sources use weakRef and auto-unsubscribe
-        * all links to targets use weakRef
-        * state.withStrongRef(sameStateButUsesStrongRefs => {}) allows creation of strong refs for sources and targets
+- Local
+- Manual
+  - manual state.destroy()
+- Observer
+  - MutationObserver -> state.destroy()
+  - support reattach with delayed check
+- RefMode
+  - createState({..}, {weakRef: true})
+    - all links to sources use weakRef and auto-unsubscribe
+    - all links to targets use weakRef
+    - state.withStrongRef(sameStateButUsesStrongRefs => {}) allows creation of strong refs for sources and targets
 
 # Work in progress below this topic
 
 ## State broadcast events
 
-* **valueChange**
-    * state: State's value has changed
-        * change is propagated to some linked states (pick, copy)
-* **destroy**
-    * state: state.destroy() has been called
-        * State removes stored value
-        * State removes all subscribers
-        * Destroy is propagated to linked states and destroyable objects
-            * destroyable objects can be fetch's abortable promises or any other
-* **refreshUI**
-    * UI should be refreshed, but state should not change
-* **domRemove**
-    * All known DOM elements should be removed with node.remove()
-    * All listeners attached to known nodes should be unsubscribed
+- **valueChange**
+  - state: State's value has changed
+    - change is propagated to some linked states (pick, copy)
+- **destroy**
+  - state: state.destroy() has been called
+    - State removes stored value
+    - State removes all subscribers
+    - Destroy is propagated to linked states and destroyable objects
+      - destroyable objects can be fetch's abortable promises or any other
+- **refreshUI**
+  - UI should be refreshed, but state should not change
+- **domRemove**
+  - All known DOM elements should be removed with node.remove()
+  - All listeners attached to known nodes should be unsubscribed
 
 Usecases:
 
-* Developer wants to remove all DOM nodes and state
-    * attach all used states to rootState
-    * attach rootDiv to state as removable
-    * state.remove({dom: true, state: true})
-* Developer wants to remove some DOM nodes and some state items
+- Developer wants to remove all DOM nodes and state
+  - attach all used states to rootState
+  - attach rootDiv to state as removable
+  - state.remove({dom: true, state: true})
+- Developer wants to remove some DOM nodes and some state items
 
 ## State API
 
-* state creation
-    * shared
-*
+- state creation
+  - shared
+-
 
 ## No external dependencies -> automatic clean up with GC
 
@@ -119,9 +120,7 @@ sources and other states. Most sources provide a way to unsubscribe and ki-frame
 state.destroy() for many types.
 
 ```typescript
-state.addDomEventInput("counter", nodes.root, "click", (ev) =>
-  state.modify((cur) => ({total: cur.total + 1})),
-);
+state.addDomEventInput('counter', nodes.root, 'click', (ev) => state.modify((cur) => ({ total: cur.total + 1 })))
 state.destroy()
 ```
 
@@ -132,28 +131,28 @@ subscriptions with WeakRef and automatic unsubscribe. In strongRef mode, all dep
 
 This allows the code to decide if the dependency should keep objects alive
 
-|                                                      | createState({total: 0}, {weakRef: false}))                                                                                                | createState({total: 0}, {weakRef: true}))                                                                          |   |   |
-|------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|---|---|
-| state.addDomEventInput(name, node, event, fn): input | state is strongly attached to node with the subscribed fn -> keeps state and all the objects it refers to in use while the node is in use | state state is weakly referenced by node's listener -> GC can remove state if there are no strong references to it |   |   |
-| state.onValueChange(fn: (value) => {...}): output    | state refers to fn strongly and keeps the fn pyramid in use                                                                               | state refers to fn weakly  -> GC can remove fn and the objects it refers to                                        |   |   |
-|                                                      |                                                                                                                                           |                                                                                                                    |   |   |
-|                                                      |                                                                                                                                           |                                                                                                                    |   |   |
+|                                                      | createState({total: 0}, {weakRef: false}))                                                                                                | createState({total: 0}, {weakRef: true}))                                                                          |     |     |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --- | --- |
+| state.addDomEventInput(name, node, event, fn): input | state is strongly attached to node with the subscribed fn -> keeps state and all the objects it refers to in use while the node is in use | state state is weakly referenced by node's listener -> GC can remove state if there are no strong references to it |     |     |
+| state.onValueChange(fn: (value) => {...}): output    | state refers to fn strongly and keeps the fn pyramid in use                                                                               | state refers to fn weakly -> GC can remove fn and the objects it refers to                                         |     |     |
+|                                                      |                                                                                                                                           |                                                                                                                    |     |     |
+|                                                      |                                                                                                                                           |                                                                                                                    |     |     |
 
 ```typescript
-function counter(state = createState({total: 0}, {weakRef: true})) {
-  const nodes = createNodes();
+function counter(state = createState({ total: 0 }, { weakRef: true })) {
+  const nodes = createNodes()
   // connect subscribers
-  state.withStrongRefs(strongRefState => {
-    strongRefState.addDomEventInput("counter", nodes.root, "click", (ev) =>
-      state.modify((cur) => ({total: cur.total + 1})),
-    );
-  });
+  state.withStrongRefs((strongRefState) => {
+    strongRefState.addDomEventInput('counter', nodes.root, 'click', (ev) =>
+      state.modify((cur) => ({ total: cur.total + 1 }))
+    )
+  })
   state.onValueChange((obj) => {
-    return (nodes.info.nodeValue = `Counter: ${obj.total}`);
-  });
+    return (nodes.info.nodeValue = `Counter: ${obj.total}`)
+  })
   // render content with state.refresh()
-  state.refresh();
-  return nodes;
+  state.refresh()
+  return nodes
 }
 ```
 
@@ -190,26 +189,26 @@ nodes.
 
 Event sources that cause ki-frame application functionality to run by sending **input** to ki-frame app
 
-* User action in browser sends DOM event
-* Browser sends event on its own
-* Promises
-* setTimeout and setInterval
-* weakref removal
+- User action in browser sends DOM event
+- Browser sends event on its own
+- Promises
+- setTimeout and setInterval
+- weakref removal
 
 ki-frame functionality can be:
 
-* change ki-frame configuration / state (internal)
-    * change state value
-    * add new state objects
-    * remove state objects
-* modify DOM (output)
-    * add new DOM nodes/content
-    * remove DOM nodes/content
-    * add/remove listeners
-    * modify DOM content
-* start external process (output)
-    * synchronous responds immediately
-    * trigger async process (and wait for response): fetch
+- change ki-frame configuration / state (internal)
+  - change state value
+  - add new state objects
+  - remove state objects
+- modify DOM (output)
+  - add new DOM nodes/content
+  - remove DOM nodes/content
+  - add/remove listeners
+  - modify DOM content
+- start external process (output)
+  - synchronous responds immediately
+  - trigger async process (and wait for response): fetch
 
 Graph shows how ki-frame
 
@@ -239,19 +238,18 @@ ki-frame uses a few mechanisms to manage the complexity:
 
 ## Linked items
 
-* stateA -> stateB
-    * shared state value object, own linked items
-    * shared state value object's path, own linked items
-* stateA -> nodeA
-* stateA -> stateB -> nodeB
-* stateA -> fetchPromise
+- stateA -> stateB
+  - shared state value object, own linked items
+  - shared state value object's path, own linked items
+- stateA -> nodeA
+- stateA -> stateB -> nodeB
+- stateA -> fetchPromise
 
-
-* DOM node
-* Removable items
-    * state value
-    * linked states
-    *
+- DOM node
+- Removable items
+  - state value
+  - linked states
+  -
 
 ## State and DOM node life cycle events
 
@@ -283,23 +281,16 @@ flowchart TD
 
 ```typescript
 function onDestroyDemo() {
-  const state = createState({total: 123})
+  const state = createState({ total: 123 })
   const info = (txt: string, s: State<Total>) => {
     const t = text()
-    state.onChange(obj => t.nodeValue = `${txt}: ${obj.total}`)
-    state.onDestroy(() => t.nodeValue = `${txt}: state destroyed`)
-    return p(t);
+    state.onChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`))
+    state.onDestroy(() => (t.nodeValue = `${txt}: state destroyed`))
+    return p(t)
   }
-  const root = p(
-    button(
-      "Click me!",
-      {onclick: state.destroy}
-    ),
-    info("1", state),
-    info("2", state)
-  );
-  state.refresh(); // render initial data
-  return root;
+  const root = p(button('Click me!', { onclick: state.destroy }), info('1', state), info('2', state))
+  state.refresh() // render initial data
+  return root
 }
 ```
 
@@ -324,7 +315,7 @@ notes:
 ## Sharing state data
 
 |                     | Description                                    | States connect to shared value                      | Destroy propagates | onChange propagates  |
-|---------------------|------------------------------------------------|-----------------------------------------------------|--------------------|----------------------|
+| ------------------- | ---------------------------------------------- | --------------------------------------------------- | ------------------ | -------------------- |
 | state.copy()        | Creates a copy fr                              |                                                     |                    | default: Both ways   |
 | state.pick("field") | Selects a field from the original state.value. | Modifications are reflected on all connected states | By default         | All connected states |
 |                     |                                                |                                                     |                    |                      |

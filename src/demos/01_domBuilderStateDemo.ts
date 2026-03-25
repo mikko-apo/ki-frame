@@ -1,48 +1,48 @@
-import { createState, type State } from "..";
-import { button, div, p, text } from "../domBuilder";
-import { events } from "../domBuilderEvents";
-import { styles } from "../domBuilderStyles";
+import { createState, type State } from '..'
+import { button, div, p, text } from '../domBuilder'
+import { events } from '../domBuilderEvents'
+import { styles } from '../domBuilderStyles'
 
 export function domBuilderWithState() {
   // DOM structure setup for testing
   const createNodes = (state: State<{ total: number }>) => {
-    const info = text();
+    const info = text()
     const root = p(
-      "Click this text to update counter",
+      'Click this text to update counter',
       {
         styles: {
-          color: "red",
+          color: 'red',
         },
         events: {
           click() {
-            state.set((cur) => ({ total: cur.total + 1 }));
+            state.set((cur) => ({ total: cur.total + 1 }))
           },
         },
       },
-      div(info, styles({ color: "green" })),
-    );
+      div(info, styles({ color: 'green' }))
+    )
     state.onValueChange((obj) => {
-      info.nodeValue = `Counter: ${obj.total}`;
-    });
-    return root;
-  };
-
-  function counter(state = createState({ total: 0 })) {
-    const root = createNodes(state);
-    // unmanaged click listener, will be removed when <div> returned counter() is removed from DOM tree
-    const reset = button(
-      "Reset",
-      events({
-        click() {
-          state.set({ total: 0 });
-        },
-      }),
-    );
-    // connect subscribers
-    // render content with state.refresh()
-    state.updateUi();
-    return div(root, reset);
+      info.nodeValue = `Counter: ${obj.total}`
+    })
+    return root
   }
 
-  return counter();
+  function counter(state = createState({ total: 0 })) {
+    const root = createNodes(state)
+    // unmanaged click listener, will be removed when <div> returned counter() is removed from DOM tree
+    const reset = button(
+      'Reset',
+      events({
+        click() {
+          state.set({ total: 0 })
+        },
+      })
+    )
+    // connect subscribers
+    // render content with state.refresh()
+    state.updateUi()
+    return div(root, reset)
+  }
+
+  return counter()
 }

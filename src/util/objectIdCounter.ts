@@ -1,5 +1,5 @@
-let runningId = 0;
+let runningId = 0
 
 export function createId(id: string) {
-  return `${id}-${runningId++}`;
+  return `${id}-${runningId++}`
 }

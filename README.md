@@ -8,23 +8,23 @@ fully accessible. It simplifies common patterns while maintaining direct interac
 
 <!-- TOC -->
 
-* [Sponsors](#sponsors)
-* [Overview](#overview)
-    * [domBuilder](#dombuilder)
-    * [State](#state)
-    * [Form](#form)
-    * [Testing](#testing)
-* [Roadmap](#roadmap)
-* [How are you supposed to use this?](#how-are-you-supposed-to-use-this)
-    * [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
-    * [Use createState()](#use-createstate)
-    * [How to structure code?](#how-to-structure-code)
-        * [Example: counter](#example-counter)
-    * [Use state.fetch(url)](#use-statefetchurl)
-    * [Use createFormState()](#use-createformstate)
-    * [How to test?](#how-to-test)
-* [What next?](#what-next)
-* [Legend for icons](#legend-for-icons)
+- [Sponsors](#sponsors)
+- [Overview](#overview)
+  - [domBuilder](#dombuilder)
+  - [State](#state)
+  - [Form](#form)
+  - [Testing](#testing)
+- [Roadmap](#roadmap)
+- [How are you supposed to use this?](#how-are-you-supposed-to-use-this)
+  - [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
+  - [Use createState()](#use-createstate)
+  - [How to structure code?](#how-to-structure-code)
+    - [Example: counter](#example-counter)
+  - [Use state.fetch(url)](#use-statefetchurl)
+  - [Use createFormState()](#use-createformstate)
+  - [How to test?](#how-to-test)
+- [What next?](#what-next)
+- [Legend for icons](#legend-for-icons)
 
 <!-- TOC -->
 
@@ -40,15 +40,15 @@ A concise, expressive utility for constructing and managing DOM trees:
 - Extended API for listeners `events()` and inline `styles()` and classes
 
 ```typescript
-p("Click this text to update counter", {
+p('Click this text to update counter', {
   styles: {
-    color: "red",
+    color: 'red',
   },
   events: {
     click() {
-      state.set((cur) => ({total: cur.total + 1}))
-    }
-  }
+      state.set((cur) => ({ total: cur.total + 1 }))
+    },
+  },
 })
 ```
 
@@ -56,9 +56,9 @@ More information:
 
 - documentation: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
 - code:
-    - [domBuilder.ts](src/domBuilder.ts)
-    - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
-    - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
+  - [domBuilder.ts](src/domBuilder.ts)
+  - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
+  - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
 
 ## State
 
@@ -70,37 +70,37 @@ into a coherent model.
 - Manages dom node event listeners, fetches, ...
 - Maintains application structure and supports inspection and monitoring
 - Provides a unified model for:
-    - Working with DOM and browser APIs
-    - Sharing state value and events across components/states (wip 🛠️)
-        - States can be connected by hierarchy, state value and/or event propagation
-        - Dispatching lifecycle events (`updateUi`, `destroy`, `stateChanged`)
-        - Working with multiple connected states.
+  - Working with DOM and browser APIs
+  - Sharing state value and events across components/states (wip 🛠️)
+    - States can be connected by hierarchy, state value and/or event propagation
+    - Dispatching lifecycle events (`updateUi`, `destroy`, `stateChanged`)
+    - Working with multiple connected states.
 
 **State provides multiple strategies and tools for cleanup and lifecycle control**
 
 - Local lifetimes
-    - When a state is connected with a root DOM node and not shared externally, garbage collection can reclaim resources
-      automatically
+  - When a state is connected with a root DOM node and not shared externally, garbage collection can reclaim resources
+    automatically
 - Resource registration
-    - DOM nodes, event listeners, fetches, and timeouts can be registered; all associated resources are released when
-      `state.destroy()` is invoked
+  - DOM nodes, event listeners, fetches, and timeouts can be registered; all associated resources are released when
+    `state.destroy()` is invoked
 - Manual destruction
-    - `state.destroy()` can be called by any code with refence to the state
+  - `state.destroy()` can be called by any code with refence to the state
 - Linked states & cascading destruction
-    - states can be linked together, when rootState.destroy() is called all linked states are destroyed
+  - states can be linked together, when rootState.destroy() is called all linked states are destroyed
 - `state.onRemoveDestroy(node)`
-    - Automatically triggers `state.destroy()` when a linked DOM node is removed from DOM tree
+  - Automatically triggers `state.destroy()` when a linked DOM node is removed from DOM tree
 - WeakRef-based fine-grained resource and link management
 
 More information:
 
 - source code: [state.ts](src/state.ts)
 - createState
-    - documentation: [Use createState()](#use-createstate)
-    - demo: https://mikko-apo.github.io/ki-frame/#domBuilderWithState
+  - documentation: [Use createState()](#use-createstate)
+  - demo: https://mikko-apo.github.io/ki-frame/#domBuilderWithState
 - state.fetch()
-    - documentation: [Use state.fetch(url)](#use-statefetchurl)
-    - demo: https://mikko-apo.github.io/ki-frame/#fetch
+  - documentation: [Use state.fetch(url)](#use-statefetchurl)
+  - demo: https://mikko-apo.github.io/ki-frame/#fetch
 
 ## Form
 
@@ -121,13 +121,13 @@ More information::
 ki-frame supports various levels of testing in addition to automated browser tests:
 
 - unit testing
-    - ki-frame is composed with listener functions which can be easily unit tested
+  - ki-frame is composed with listener functions which can be easily unit tested
 - snapshot tests
-    - generated DOM tree
-    - updated DOM tree
+  - generated DOM tree
+  - updated DOM tree
 - headless integration testing with jsdom
-    - components and even apps can be tested with jsdom.
-    - DOM events can be triggered to simulate user actions in a browser
+  - components and even apps can be tested with jsdom.
+  - DOM events can be triggered to simulate user actions in a browser
 
 More information:
 
@@ -141,58 +141,58 @@ More information:
    specified dom object. All DOM nodes are available as builder functions.
 2. Extract a variable for each HTMLElement or Text node that you want access separately. Pass the nodes as variables how
    you want.
-    ```typescript
+   ```typescript
    const t = text()
-   t.nodeValue = "Click me"
+   t.nodeValue = 'Click me'
    const root = p(t)
    ```
 3. Builder functions takes in a list of parameters. Supported parameters are:
-    * **string** is added with `.appendChild(getDocument().createTextNode(arg))`
-    * dom **HTMLElement** or **Text** instances are added with `.appendChild()`
-    * **arrays** are iterated recursively and each item is added to the object
-    * **WrappedNode** is used by dom extension APIs and contains the resulting dom Node instance. Is added to the object
-      with .appendChild(arg.node)
-    * **object** which contains fields from HTMLElement and Text
-        * **styles:** object
-            * CSS code completition is implemented with https://github.com/frenic/csstype
-            * multiple CSS definitions can be passed to objects, processing order is depth first
-            * CSS definitions can be shared between multiple objects
-        * **events** object with DOM event fields
-            * each field is registered with `node.addEventListener(eventName, {node, event} => void)`
-            * handler takes in object parameter
-        * **class:** string
-            * can be a single string for single class name, space separated string for multiple class names, array list
-              of class names and nested arrays of class names
-        * otherwise
-            * fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
-            * the key and value is set with `.setAttribute(key, value)`
-            * note: some fields might not work
+   - **string** is added with `.appendChild(getDocument().createTextNode(arg))`
+   - dom **HTMLElement** or **Text** instances are added with `.appendChild()`
+   - **arrays** are iterated recursively and each item is added to the object
+   - **WrappedNode** is used by dom extension APIs and contains the resulting dom Node instance. Is added to the object
+     with .appendChild(arg.node)
+   - **object** which contains fields from HTMLElement and Text
+     - **styles:** object
+       - CSS code completition is implemented with https://github.com/frenic/csstype
+       - multiple CSS definitions can be passed to objects, processing order is depth first
+       - CSS definitions can be shared between multiple objects
+     - **events** object with DOM event fields
+       - each field is registered with `node.addEventListener(eventName, {node, event} => void)`
+       - handler takes in object parameter
+     - **class:** string
+       - can be a single string for single class name, space separated string for multiple class names, array list
+         of class names and nested arrays of class names
+     - otherwise
+       - fields containing a function and starting with "on" are added with `.addEventListener(event, value)`
+       - the key and value is set with `.setAttribute(key, value)`
+       - note: some fields might not work
 
 ```typescript
-import {a, p, setElementToId} from "./domBuilder";
+import { a, p, setElementToId } from './domBuilder'
 
-const state = createState({total: 0})
-const root = p("Click this text to update counter", {
+const state = createState({ total: 0 })
+const root = p('Click this text to update counter', {
   styles: {
-    color: "red",
+    color: 'red',
   },
   events: {
     click() {
-      state.set((cur) => ({total: cur.total + 1}))
-    }
-  }
+      state.set((cur) => ({ total: cur.total + 1 }))
+    },
+  },
 })
-const info = text();
+const info = text()
 state.onValueChange((obj) => {
-  info.nodeValue = `Counter: ${obj.total}`;
-});
-setElementToId('app', div(root, info));
+  info.nodeValue = `Counter: ${obj.total}`
+})
+setElementToId('app', div(root, info))
 ```
 
 Checkout
 
-* the more indepth demo at the demo site: https://mikko-apo.github.io/ki-frame#domBuilder
-* source code [domBuilder.ts](src/domBuilder.ts)
+- the more indepth demo at the demo site: https://mikko-apo.github.io/ki-frame#domBuilder
+- source code [domBuilder.ts](src/domBuilder.ts)
 
 ## Use createState()
 
@@ -207,65 +207,65 @@ State supports following functions for setting and notifying of state change:
   `.onChange()`
   returns the unsubscribe function
 
-Example component using domBuilder and `element.onclick`, see [example for state.addDomEvent](#example-counter)  for
+Example component using domBuilder and `element.onclick`, see [example for state.addDomEvent](#example-counter) for
 more indepth
 approach:
 
 ```typescript
 const createNodes = () => {
-  const info = text();
-  const root = p("Click to update counter", info);
-  return {info, root};
-};
-
-function counter(state = createState({total: 0})) {
-  const nodes = createNodes();
-  nodes.root.onclick = () => state.set((cur) => ({total: cur.total + 1}));
-  state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
-  state.refresh();
-  return nodes;
+  const info = text()
+  const root = p('Click to update counter', info)
+  return { info, root }
 }
 
-setElementToId('app', counter().root);
+function counter(state = createState({ total: 0 })) {
+  const nodes = createNodes()
+  nodes.root.onclick = () => state.set((cur) => ({ total: cur.total + 1 }))
+  state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`))
+  state.refresh()
+  return nodes
+}
+
+setElementToId('app', counter().root)
 ```
 
 Example above forms following DOM nodes:
 
 - &lt;p/> with onclick
-    - Text node: "Click to update counter"
-    - Text node: ""
+  - Text node: "Click to update counter"
+  - Text node: ""
 
 In the initialization code, state.refresh() calls state's onChange listeners and text is included in to the Text node:
 
 - &lt;p/> with onclick
-    - Text node: "Click to update counter"
-    - Text node: "Counter: 0"
+  - Text node: "Click to update counter"
+  - Text node: "Counter: 0"
 
 &lt;p/> is attached to page DOM as a child of element with id 'app'.
 
 Clicking on p increments counter with the help of the state:
 
 - &lt;p/> with onclick
-    - Text node: "Click to update counter"
-    - Text node: "Counter: 1"
+  - Text node: "Click to update counter"
+  - Text node: "Counter: 1"
 
 Checkout
 
-* the more indepth demos at the demo site: https://mikko-apo.github.io/ki-frame#createStateDemo
-* source code [state.ts](src/state.ts)
+- the more indepth demos at the demo site: https://mikko-apo.github.io/ki-frame#createStateDemo
+- source code [state.ts](src/state.ts)
 
 ## How to create components and structure code?
 
 There are two ways to create components with ki-frame:
 
-* Dom tree first
-    1. Define dom nodes that are going to be connected somehow
-    2. **Define DOM tree with non-connected and connected nodes**
-    3. Use states and forms to connect functionality to nodes
-* Dom tree last
-    1. Define dom nodes that are going to be connected somehow
-    2. Use states and forms to connect functionality to nodes
-    3. **Define DOM tree with non-connected and connected nodes**
+- Dom tree first
+  1. Define dom nodes that are going to be connected somehow
+  2. **Define DOM tree with non-connected and connected nodes**
+  3. Use states and forms to connect functionality to nodes
+- Dom tree last
+  1. Define dom nodes that are going to be connected somehow
+  2. Use states and forms to connect functionality to nodes
+  3. **Define DOM tree with non-connected and connected nodes**
 
 **Dom structure** last might produce less code if the state and form APIs contain domBuilder functions for nodes that
 are already attached to the state / form. Currently they don't, so both approaches are fairly equal in DX.
@@ -295,19 +295,19 @@ Example:
 ```typescript
 // DOM structure setup for testing
 const createNodes = () => {
-  const info = text();
-  const root = p("Click to update counter", info);
-  return {info, root};
-};
+  const info = text()
+  const root = p('Click to update counter', info)
+  return { info, root }
+}
 
-function counter(state = createState({total: 0})) {
-  const nodes = createNodes();
+function counter(state = createState({ total: 0 })) {
+  const nodes = createNodes()
   // connect subscribers
-  state.addDomEvent("counter", nodes.root, "click", () => state.set((cur) => ({total: cur.total + 1})));
-  state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`));
+  state.addDomEvent('counter', nodes.root, 'click', () => state.set((cur) => ({ total: cur.total + 1 })))
+  state.onChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`))
   // render content with state.refresh()
-  state.refresh();
-  return nodes;
+  state.refresh()
+  return nodes
 }
 ```
 
@@ -317,12 +317,12 @@ Check out the live demos at https://mikko-apo.github.io/ki-frame/#createFormStat
 
 state.fetch(url)
 
-* by default assertOk option is true: return code needs to be 200-299. Promise handling raises an error is return code
+- by default assertOk option is true: return code needs to be 200-299. Promise handling raises an error is return code
   is something else
-* it's good to define both ok and error handler with .then() `state.fetch(url).then(okCase, errorCase)`
-* is attached to state for state.destroy() and is detached after fetch promise completes
-* returns an object with {destroy: () => void} function that aborts the fetch
-* supports timeout
+- it's good to define both ok and error handler with .then() `state.fetch(url).then(okCase, errorCase)`
+- is attached to state for state.destroy() and is detached after fetch promise completes
+- returns an object with {destroy: () => void} function that aborts the fetch
+- supports timeout
 
 **note**: example doesn't use state to store value. regular `let`is fine until you need to pass it to other components
 or
@@ -330,26 +330,26 @@ return it for parent.
 
 ```typescript
 export function fetchDemo() {
-  const info = text("Not loaded");
-  const b = button("Click me to fetch!");
-  let counter = 0;
+  const info = text('Not loaded')
+  const b = button('Click me to fetch!')
+  let counter = 0
 
-  const setText = (text: string) => (info.nodeValue = text);
+  const setText = (text: string) => (info.nodeValue = text)
   const handleError = (reason: unknown) =>
     setText(
       isErrorResponse(reason)
         ? `There was an error, response.status is ${reason.errorResponse.status}`
-        : `There was an error, response.status is ${reason}`,
-    );
+        : `There was an error, response.status is ${reason}`
+    )
 
-  const state = createController();
-  state.addDomEvent("start fetch", b, "click", () => {
-    counter++;
-    setText("Loading...");
-    state.fetch("test.json", {timeoutMs: 1000}).then(() => setText(`Loaded ok.`), handleError);
-  });
+  const state = createController()
+  state.addDomEvent('start fetch', b, 'click', () => {
+    counter++
+    setText('Loading...')
+    state.fetch('test.json', { timeoutMs: 1000 }).then(() => setText(`Loaded ok.`), handleError)
+  })
 
-  return div(b, info);
+  return div(b, info)
 }
 ```
 
@@ -368,17 +368,17 @@ with "<div id='app'></div>". After calling ki-frame creates nodes works straight
 HTML. .click() and its subscribers are processed synchronously in the background, so no need for awaits.
 
 ```typescript
-describe("Example tests", () => {
-  it("connected counter() and root.click()", () => {
-    setJsdomApp();
-    const {root, info} = counter(createState({total: 0}));
-    expect(root).toMatchSnapshot();
-    expect(info.nodeValue).toEqual("Counter: 0");
-    root.click();
-    expect(root).toMatchSnapshot();
-    expect(info.nodeValue).toEqual("Counter: 1");
-  });
-});
+describe('Example tests', () => {
+  it('connected counter() and root.click()', () => {
+    setJsdomApp()
+    const { root, info } = counter(createState({ total: 0 }))
+    expect(root).toMatchSnapshot()
+    expect(info.nodeValue).toEqual('Counter: 0')
+    root.click()
+    expect(root).toMatchSnapshot()
+    expect(info.nodeValue).toEqual('Counter: 1')
+  })
+})
 ```
 
 Snapshot file contains the rendered HTML:
@@ -391,14 +391,14 @@ exports[`Example tests > connected counter() and root.click() 1`] = `
   Click to update counter
   Counter: 0
 </p>
-`;
+`
 
 exports[`Example tests > connected counter() and root.click() 2`] = `
 <p>
   Click to update counter
   Counter: 1
 </p>
-`;
+`
 ```
 
 # Roadmap
@@ -406,153 +406,153 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 - 0.0.1 <- Development is at this stage
 - 0.1 First npm release
 - 1.0
-    - All planned items below:
-    - Stable APIs
-        - state, controller
-            - state linking: events and data
-            - event propagation
-            - resource management
-                - fetch, timeout
-                - promise
-        - context
-            - defaults
-            - states and app structure
-            - logging
-        - form
+  - All planned items below:
+  - Stable APIs
+    - state, controller
+      - state linking: events and data
+      - event propagation
+      - resource management
+        - fetch, timeout
+        - promise
+    - context
+      - defaults
+      - states and app structure
+      - logging
+    - form
 - 2.0 SSR
 
 **Planned**
 
-* state
-    * logging of relevant things via context
-    * unified model for sharing data, event signalling
-        * to linked/child states
-        * events (updateUi, destroy, stateChanged):
-            * do/ignore
-            * passthrough / prevent
-        * linked state value:
-            * share full original data, lens of original data, own data
-            * state value from merged children
-    * unified model for cleanup
-        * owned resources: listeners, fetches, timeouts, ...
-        * destroy event sent by default to child states
-        * weakref/regular ref
-    * gc/cleanup
-        * weakReff️
-        * onRemoveDestroy(node) - MutationObserver
-            * MutationObserver and WeakRef + FinalizationRegistry
-        * assertions
-            * allowedSources
-                * limits the sources the state can be attached to
-                * optional safety check that prevents errors
-            * allowedTargets
-            * state used after destroy()
-                * error logging
-                * return error
-        * tooling
-    * root node event listener & delegation directly to listener
-    * state.link() for attaching existing states together
-        * prevent state circles
-* context 🛠️
-    * context contains
-        * default configurations for created objects
-        * document reference for domBuilder
-        * root id + main counter
-        * centralized logging
-    * provides connection point for improved developer tooling
-        * tooling for inspecting created states and the related state values
-            * whole app vs section vs component
-        * monitoring
-        * runtime configuration
-        * send reports to server
-* form
-    * **bugs**
-        * race condition when pressing enter on input field, submit handling is triggered before onkeyup
-    * render initial values
-        * createForm is not able to work without init state
-        * initial state with partially set and non-set values with no visible errors
-    * dynamic array of items
-    * disable / exclude / remove field/group from state temporarily
-    * reset to initial value
-    * undo / redo for state
-    * input id and name generation
-    * two-way mapping, from init value to input string, from input string to state
-    * simplify domEvent with domInput
-        * default event and mapper based on input type
-    * auto disable for fields when submit is being processed
-    * improved validation API
-        * prevent submit if validations are failing
-        * async validators
-        * read validation specification from dom node
-        * composable validations
-        * separate handling of validation success & failure, expose validation handling to root level
-            * return value more understandable
-        * state/group state available to field level
-        * field validation issues available to root level
-        * mapping errors as validation issues
-* external event sources
-    * fetch
-        * retry strategy: retries, delay
-        * does ki-frame need these both to work:
-            * state.fetch(url).then(mapper)
-            * state.fetch(url, {map: mapper})
-    * timeout
-        * execute fn and remove timeout before it triggers
-    * XHR integration
-        * abort
-* router & url handling
-    * tigher integration with browser urls
-    * initialize application based on route parameters
-    * control application url and actions based on user actions
-    * port of https://github.com/mikko-apo/ki-router.js
-* Standard Schema support
-    * form validation
-    * state validation
-* styles and classes
-    * &gt;style> & class support
-    * support plain numbers for px
-* domBuilder
-    * event() syntax: `a(event({click: ({ev, node, value}) => {...}}))`
+- state
+  - logging of relevant things via context
+  - unified model for sharing data, event signalling
+    - to linked/child states
+    - events (updateUi, destroy, stateChanged):
+      - do/ignore
+      - passthrough / prevent
+    - linked state value:
+      - share full original data, lens of original data, own data
+      - state value from merged children
+  - unified model for cleanup
+    - owned resources: listeners, fetches, timeouts, ...
+    - destroy event sent by default to child states
+    - weakref/regular ref
+  - gc/cleanup
+    - weakReff️
+    - onRemoveDestroy(node) - MutationObserver
+      - MutationObserver and WeakRef + FinalizationRegistry
+    - assertions
+      - allowedSources
+        - limits the sources the state can be attached to
+        - optional safety check that prevents errors
+      - allowedTargets
+      - state used after destroy()
+        - error logging
+        - return error
+    - tooling
+  - root node event listener & delegation directly to listener
+  - state.link() for attaching existing states together
+    - prevent state circles
+- context 🛠️
+  - context contains
+    - default configurations for created objects
+    - document reference for domBuilder
+    - root id + main counter
+    - centralized logging
+  - provides connection point for improved developer tooling
+    - tooling for inspecting created states and the related state values
+      - whole app vs section vs component
+    - monitoring
+    - runtime configuration
+    - send reports to server
+- form
+  - **bugs**
+    - race condition when pressing enter on input field, submit handling is triggered before onkeyup
+  - render initial values
+    - createForm is not able to work without init state
+    - initial state with partially set and non-set values with no visible errors
+  - dynamic array of items
+  - disable / exclude / remove field/group from state temporarily
+  - reset to initial value
+  - undo / redo for state
+  - input id and name generation
+  - two-way mapping, from init value to input string, from input string to state
+  - simplify domEvent with domInput
+    - default event and mapper based on input type
+  - auto disable for fields when submit is being processed
+  - improved validation API
+    - prevent submit if validations are failing
+    - async validators
+    - read validation specification from dom node
+    - composable validations
+    - separate handling of validation success & failure, expose validation handling to root level
+      - return value more understandable
+    - state/group state available to field level
+    - field validation issues available to root level
+    - mapping errors as validation issues
+- external event sources
+  - fetch
+    - retry strategy: retries, delay
+    - does ki-frame need these both to work:
+      - state.fetch(url).then(mapper)
+      - state.fetch(url, {map: mapper})
+  - timeout
+    - execute fn and remove timeout before it triggers
+  - XHR integration
+    - abort
+- router & url handling
+  - tigher integration with browser urls
+  - initialize application based on route parameters
+  - control application url and actions based on user actions
+  - port of https://github.com/mikko-apo/ki-router.js
+- Standard Schema support
+  - form validation
+  - state validation
+- styles and classes
+  - &gt;style> & class support
+  - support plain numbers for px
+- domBuilder
+  - event() syntax: `a(event({click: ({ev, node, value}) => {...}}))`
 
 **Bubbling under**
 
-* state
-    * propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
-        * state.refresh("all"|"linked"|"this")
-        * state.destroy("all"|"linked"|"this")
-        * maybe when linking parent and child state, the accepted events should be listed: {destroy: true, refresh:
-          true,
-          onchange: (state) => {...}}
-            * default should be: {destroy: true, refresh: true}
-        * maybe onChange should include onDestory subscription too
-        * Create a diagram to explain how to changes and destroys work together
-    * state operations
-        * state.reducer()
-        * state.pick()
-        * state.merge()
-    * generic promise support
-        * should unattach from parentState once promise fulfills or rejects
-* domBuilder
-    * separate classic and extended api
-        * better ways to add class, style, event handlers etc
-            * Partial<HTMLElement> and Partial<Text> pollute builder function apis CreateElementArg, extended API can
-              provide have more straightforward DX
-    * Configure createElement partial attribute types with JSX.IntrinsicElements[T] to get props for HtmlElements
-* form
-    * group level validation: support for grouping inputs in to groups
-    * Standard Schema support
-* Advanced stuff
-    * requestAnimationFrame - queue DOM reads and writes
-    * Virtualize long lists - Provide or recommend a tiny virtualization helper for lists (windowing) to render only
-      visible items.
-    * IntersectionObserver - Lazy-load images/components when entering viewport.
-    * Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate
-      progressively or lazy-load components.
-    * Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
-    * SSR
-        * Not yet
-        * domBuilder and state resource registration and jsdom can be used to collect data for SSR
-        * the client side needs to be able to hydrate in place
+- state
+  - propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
+    - state.refresh("all"|"linked"|"this")
+    - state.destroy("all"|"linked"|"this")
+    - maybe when linking parent and child state, the accepted events should be listed: {destroy: true, refresh:
+      true,
+      onchange: (state) => {...}}
+      - default should be: {destroy: true, refresh: true}
+    - maybe onChange should include onDestory subscription too
+    - Create a diagram to explain how to changes and destroys work together
+  - state operations
+    - state.reducer()
+    - state.pick()
+    - state.merge()
+  - generic promise support
+    - should unattach from parentState once promise fulfills or rejects
+- domBuilder
+  - separate classic and extended api
+    - better ways to add class, style, event handlers etc
+      - Partial<HTMLElement> and Partial<Text> pollute builder function apis CreateElementArg, extended API can
+        provide have more straightforward DX
+  - Configure createElement partial attribute types with JSX.IntrinsicElements[T] to get props for HtmlElements
+- form
+  - group level validation: support for grouping inputs in to groups
+  - Standard Schema support
+- Advanced stuff
+  - requestAnimationFrame - queue DOM reads and writes
+  - Virtualize long lists - Provide or recommend a tiny virtualization helper for lists (windowing) to render only
+    visible items.
+  - IntersectionObserver - Lazy-load images/components when entering viewport.
+  - Avoid heavy synchronous work on first paint - Defer non-essential JS until after interactive. Hydrate
+    progressively or lazy-load components.
+  - Use documentFragment and off-DOM construction for big updates - Build node trees in fragments and append once.
+  - SSR
+    - Not yet
+    - domBuilder and state resource registration and jsdom can be used to collect data for SSR
+    - the client side needs to be able to hydrate in place
 
 # What next?
 
@@ -562,12 +562,12 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 # Legend for icons
 
 | Icon | Description         |
-|------|---------------------|
-| ✅    | Done                |
-| 🛠️  | Work in Progress    |
+| ---- | ------------------- |
+| ✅   | Done                |
+| 🛠️   | Work in Progress    |
 | 📅   | Planned             |
 | 🤔   | Possible            |
 | 🚫   | Not Going to Happen |
 | 🔥   | Top priority        |
-| ⭐    | Medium priority     |
+| ⭐   | Medium priority     |
 | 🐢   | Low priority        |
