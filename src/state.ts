@@ -320,8 +320,7 @@ export class State<Value> extends Controller {
 
   update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>)) {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
-    if (typeof this.value !== 'object') {
-    }
+    if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
     const finalUpdate =
       typeof update === 'function' ? (update as (cur: Value) => Value | Partial<Value>)(this.value) : update
     this.set({ ...this.value, ...finalUpdate })

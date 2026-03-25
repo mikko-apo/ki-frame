@@ -54,8 +54,8 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
   })
 }
 
-var doc: Document | undefined = typeof document !== 'undefined' ? document : undefined
-var isNode = (e: unknown): e is Node => {
+let doc: Document | undefined = typeof document !== 'undefined' ? document : undefined
+let isNode = (e: unknown): e is Node => {
   return typeof document !== 'undefined' && !![HTMLElement, Text].find((value) => e instanceof value)
 }
 
