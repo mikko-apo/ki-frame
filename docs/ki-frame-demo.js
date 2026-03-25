@@ -1,133 +1,132 @@
-"use strict";
-(() => {
+'use strict'
+;(() => {
   // src/util/objectIdCounter.ts
-  var runningId = 0;
+  var runningId = 0
   function createId(id) {
-    return `${id}-${runningId++}`;
+    return `${id}-${runningId++}`
   }
 
   // src/channel.ts
   var Channel = class {
     constructor(name) {
-      this.subs = /* @__PURE__ */ new Set();
-      this.idTxt = (txt) => `${this.id}: ${txt}`;
-      this.id = createId(name);
+      this.subs = /* @__PURE__ */ new Set()
+      this.idTxt = (txt) => `${this.id}: ${txt}`
+      this.id = createId(name)
     }
     subscribe(fn) {
-      this.subs.add(fn);
+      this.subs.add(fn)
       return () => {
-        this.unsubscribe(fn);
-      };
+        this.unsubscribe(fn)
+      }
     }
     subscribeFn() {
-      return (fn) => this.subscribe(fn);
+      return (fn) => this.subscribe(fn)
     }
     // subscribe once: handler auto-unsubscribe after first invocation
     once(fn) {
-      const unsub = () => this.unsubscribe(wrapper);
+      const unsub = () => this.unsubscribe(wrapper)
       const wrapper = (...args) => {
-        unsub();
-        fn(...args);
-      };
-      this.subs.add(wrapper);
-      return unsub;
+        unsub()
+        fn(...args)
+      }
+      this.subs.add(wrapper)
+      return unsub
     }
     unsubscribe(fn) {
-      this.subs.delete(fn);
+      this.subs.delete(fn)
     }
     // synchronous publish — invokes handlers and doesn't wait for Promises
     publish(...args) {
       for (const fn of Array.from(this.subs)) {
         try {
-          fn(...args);
+          fn(...args)
         } catch (err) {
-          console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err);
+          console.error(this.idTxt(`Error in channel.publish() for '${this.id}':`), err)
         }
       }
     }
     // asynchronous publish — waits for all subscribers; rejects if any rejects
     async publishAsync(...args) {
-      const promises = Array.from(this.subs).map(async (fn) => fn(...args));
-      const settled = await Promise.allSettled(promises);
-      const rejections = settled.filter((s2) => s2.status === "rejected");
+      const promises = Array.from(this.subs).map(async (fn) => fn(...args))
+      const settled = await Promise.allSettled(promises)
+      const rejections = settled.filter((s2) => s2.status === 'rejected')
       if (rejections.length) {
-        const err = new Error(`${rejections.length} subscriber(s) failed`);
-        err.details = rejections.map((r) => r.reason);
-        throw err;
+        const err = new Error(`${rejections.length} subscriber(s) failed`)
+        err.details = rejections.map((r) => r.reason)
+        throw err
       }
     }
     destroy() {
-      this.subs.clear();
+      this.subs.clear()
     }
-  };
+  }
   var ChannelRegistry = class {
     constructor() {
-      this.map = /* @__PURE__ */ new Map();
+      this.map = /* @__PURE__ */ new Map()
     }
     get(name) {
-      let ch = this.map.get(name);
+      let ch = this.map.get(name)
       if (!ch) {
-        ch = new Channel(String(name));
-        this.map.set(name, ch);
+        ch = new Channel(String(name))
+        this.map.set(name, ch)
       }
-      return ch;
+      return ch
     }
     destroy() {
-      for (const ch of this.map.values()) ch.destroy();
-      this.map.clear();
+      for (const ch of this.map.values()) ch.destroy()
+      this.map.clear()
     }
-  };
+  }
 
   // src/form.ts
   var FormsInput = class {
     constructor(node, key, map2, validate) {
-      this.node = node;
-      this.key = key;
-      this.map = map2;
-      this.validate = validate;
+      this.node = node
+      this.key = key
+      this.map = map2
+      this.validate = validate
     }
-  };
+  }
   function formEvent(node, key, map2, validate) {
-    return new FormsInput(node, key, map2, validate);
+    return new FormsInput(node, key, map2, validate)
   }
   function collectFormsInputs(root) {
-    const out = [];
+    const out = []
     function visit(node, pathParts) {
-      if (node == null) return;
+      if (node == null) return
       if (node instanceof FormsInput) {
-        const path = pathParts.map((p2) => String(p2)).join(".");
-        out.push([path, node]);
-        return;
+        const path = pathParts.map((p2) => String(p2)).join('.')
+        out.push([path, node])
+        return
       }
       if (Array.isArray(node)) {
         for (let i2 = 0; i2 < node.length; i2++) {
-          visit(node[i2], [...pathParts, i2]);
+          visit(node[i2], [...pathParts, i2])
         }
-        return;
+        return
       }
-      if (typeof node === "object") {
+      if (typeof node === 'object') {
         for (const key of Object.keys(node)) {
-          visit(node[key], [...pathParts, key]);
+          visit(node[key], [...pathParts, key])
         }
-        return;
+        return
       }
     }
-    visit(root, []);
-    return out;
+    visit(root, [])
+    return out
   }
   function readRaw(node) {
-    var _a2;
-    const anyNode = node;
-    if ("value" in anyNode && typeof anyNode.value === "string") return anyNode.value;
-    return String((_a2 = node.textContent) != null ? _a2 : "");
+    var _a2
+    const anyNode = node
+    if ('value' in anyNode && typeof anyNode.value === 'string') return anyNode.value
+    return String((_a2 = node.textContent) != null ? _a2 : '')
   }
 
   // src/promiseDestroy.ts
   var PromiseDestroy = class _PromiseDestroy {
-    constructor(promise, destroy = () => {
-    }) {
-      this.promise = promise;
-      this.destroy = destroy;
+    constructor(promise, destroy = () => {}) {
+      this.promise = promise
+      this.destroy = destroy
     }
     /**
      * Promise.then implementation. Can be used to map the response to another value
@@ -138,304 +137,306 @@
      */
     then(onfulfilled, onrejected) {
       if (!onfulfilled && !onrejected) {
-        return this.promise;
+        return this.promise
       }
-      return this.promise.then(onfulfilled, onrejected);
+      return this.promise.then(onfulfilled, onrejected)
     }
     catch(onrejected) {
       if (!onrejected) {
-        return this;
+        return this
       }
-      return this.promise.catch(onrejected);
+      return this.promise.catch(onrejected)
     }
     finally(onfinally) {
-      return this.promise.finally(onfinally);
+      return this.promise.finally(onfinally)
     }
     get [Symbol.toStringTag]() {
-      return _PromiseDestroy.name;
+      return _PromiseDestroy.name
     }
     /**
      * Optional: explicit toString which mirrors Object.prototype.toString
      */
     toString() {
-      return Object.prototype.toString.call(this);
+      return Object.prototype.toString.call(this)
     }
-  };
-  var _a;
+  }
+  var _a
   var TimeoutDestroyable = class {
     constructor(fn, timeout) {
-      this.fn = fn;
-      this.timeout = timeout;
-      this.at = Date.now() + ((_a = this.timeout) != null ? _a : 0);
-      this.id = setTimeout(this.fn, this.timeout);
+      this.fn = fn
+      this.timeout = timeout
+      this.at = Date.now() + ((_a = this.timeout) != null ? _a : 0)
+      this.id = setTimeout(this.fn, this.timeout)
     }
     destroy() {
-      clearTimeout(this.id);
+      clearTimeout(this.id)
     }
-  };
+  }
   var FetchDestroyable = class extends PromiseDestroy {
     constructor(url2, timeoutMs, promise, destroy) {
-      super(promise, destroy);
-      this.url = url2;
-      this.timeoutMs = timeoutMs;
-      this.promise = promise;
-      this.destroy = destroy;
+      super(promise, destroy)
+      this.url = url2
+      this.timeoutMs = timeoutMs
+      this.promise = promise
+      this.destroy = destroy
     }
-  };
+  }
 
   // src/util/getByPath.ts
   function getByPath(obj, path) {
-    if (obj == null) return void 0;
-    let segments = [];
+    if (obj == null) return void 0
+    let segments = []
     if (Array.isArray(path)) {
-      segments = path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2);
-    } else if (typeof path === "string") {
-      if (path === "") return obj;
-      segments = path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
+      segments = path.map((p2) => (typeof p2 === 'string' && /^\d+$/.test(p2) ? Number(p2) : p2))
+    } else if (typeof path === 'string') {
+      if (path === '') return obj
+      segments = path.split('.').map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg))
     } else {
-      return void 0;
+      return void 0
     }
-    let cur = obj;
+    let cur = obj
     for (const seg of segments) {
-      if (cur == null) return void 0;
-      cur = cur[seg];
+      if (cur == null) return void 0
+      cur = cur[seg]
     }
-    return cur;
+    return cur
   }
 
   // src/util/setByPath.ts
   function setByPath(obj, path, value) {
-    if (typeof path === "string") {
-      path = path.split(".").map((seg) => {
-        return /^[0-9]+$/.test(seg) ? Number(seg) : seg;
-      });
+    if (typeof path === 'string') {
+      path = path.split('.').map((seg) => {
+        return /^[0-9]+$/.test(seg) ? Number(seg) : seg
+      })
     }
-    if (path.length === 0) return;
-    let cur = obj;
+    if (path.length === 0) return
+    let cur = obj
     for (let i2 = 0; i2 < path.length - 1; i2++) {
-      const key = path[i2];
+      const key = path[i2]
       if (cur[key] == null) {
-        const nextKey = path[i2 + 1];
-        cur[key] = typeof nextKey === "number" ? [] : {};
+        const nextKey = path[i2 + 1]
+        cur[key] = typeof nextKey === 'number' ? [] : {}
       }
-      cur = cur[key];
+      cur = cur[key]
     }
-    const lastKey = path[path.length - 1];
-    cur[lastKey] = value;
+    const lastKey = path[path.length - 1]
+    cur[lastKey] = value
   }
   function copyAndSet(obj, path, value) {
-    const segments = Array.isArray(path) ? path.map((p2) => typeof p2 === "string" && /^\d+$/.test(p2) ? Number(p2) : p2) : path === "" ? [] : path.split(".").map((seg) => /^\d+$/.test(seg) ? Number(seg) : seg);
-    if (segments.length === 0) return value;
-    const parents = [];
-    let cur = obj;
-    parents.push(cur);
+    const segments = Array.isArray(path)
+      ? path.map((p2) => (typeof p2 === 'string' && /^\d+$/.test(p2) ? Number(p2) : p2))
+      : path === ''
+        ? []
+        : path.split('.').map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg))
+    if (segments.length === 0) return value
+    const parents = []
+    let cur = obj
+    parents.push(cur)
     for (const seg of segments) {
-      cur = cur !== null && typeof cur === "object" ? cur[seg] : void 0;
-      parents.push(cur);
+      cur = cur !== null && typeof cur === 'object' ? cur[seg] : void 0
+      parents.push(cur)
     }
-    let newChild = value;
+    let newChild = value
     for (let i2 = segments.length - 1; i2 >= 0; i2--) {
-      const key = segments[i2];
-      const origParent = parents[i2];
-      let newParent;
+      const key = segments[i2]
+      const origParent = parents[i2]
+      let newParent
       if (Array.isArray(origParent)) {
-        newParent = origParent.slice();
-      } else if (origParent !== null && typeof origParent === "object") {
-        newParent = { ...origParent };
+        newParent = origParent.slice()
+      } else if (origParent !== null && typeof origParent === 'object') {
+        newParent = { ...origParent }
       } else {
-        newParent = typeof key === "number" ? [] : {};
+        newParent = typeof key === 'number' ? [] : {}
       }
-      if (Array.isArray(newParent) && typeof key === "number") {
+      if (Array.isArray(newParent) && typeof key === 'number') {
         if (key >= newParent.length) {
-          newParent.length = key + 1;
+          newParent.length = key + 1
         }
       }
-      newParent[key] = newChild;
-      newChild = newParent;
+      newParent[key] = newChild
+      newChild = newParent
     }
-    return newChild;
+    return newChild
   }
 
   // src/util/strongOrWeakSet.ts
   var StrongOrWeakSet = class {
     constructor(mode) {
-      this.coerce = mode;
+      this.coerce = mode
     }
     *all() {
       if (this.items) {
         for (const i2 of this.items) {
           if (i2 instanceof WeakRef) {
-            const deref = i2.deref();
+            const deref = i2.deref()
             if (deref === void 0) {
-              this.items.delete(i2);
+              this.items.delete(i2)
             } else {
-              yield deref;
+              yield deref
             }
           } else {
-            yield i2;
+            yield i2
           }
         }
       }
     }
     add(item, itemMode = this.coerce) {
-      const weakRef = new WeakRef(item);
+      const weakRef = new WeakRef(item)
       const unsub = () => {
-        const deref = weakRef.deref();
+        const deref = weakRef.deref()
         if (deref) {
-          this.delete(deref);
+          this.delete(deref)
         }
-      };
+      }
       for (const i2 of this.all()) {
         if (i2 === item) {
-          return unsub;
+          return unsub
         }
       }
-      const newItem = itemMode === "weak" ? weakRef : item;
+      const newItem = itemMode === 'weak' ? weakRef : item
       if (!this.items) {
-        this.items = /* @__PURE__ */ new Set();
+        this.items = /* @__PURE__ */ new Set()
       }
-      this.items.add(newItem);
-      return unsub;
+      this.items.add(newItem)
+      return unsub
     }
     delete(item) {
       if (this.items) {
         for (const i2 of this.items) {
           if (i2 instanceof WeakRef) {
-            const deref = i2.deref();
+            const deref = i2.deref()
             if (deref === void 0 || deref === item) {
-              this.items.delete(i2);
+              this.items.delete(i2)
             }
           } else {
             if (i2 === item) {
-              this.items.delete(i2);
+              this.items.delete(i2)
             }
           }
         }
         if (this.items.size === 0) {
-          this.destroy();
+          this.destroy()
         }
       }
     }
     destroy() {
       if (this.items) {
-        this.items.clear();
-        this.items = void 0;
+        this.items.clear()
+        this.items = void 0
       }
     }
-  };
+  }
   var DestroyableSet = class extends StrongOrWeakSet {
     destroy() {
       for (const destroyable of this.all()) {
         try {
-          destroyable.destroy();
+          destroyable.destroy()
         } catch (err) {
-          console.error(`Error in destroying item`, err);
+          console.error(`Error in destroying item`, err)
         }
       }
-      super.destroy();
+      super.destroy()
     }
-  };
+  }
 
   // src/util/typeUtils.ts
   function isDefined(item) {
-    return item !== void 0 && item !== null;
+    return item !== void 0 && item !== null
   }
 
   // src/state.ts
   function shallowEqual(a2, b2) {
-    return a2 === b2;
+    return a2 === b2
   }
   var Context = class {
-    constructor(parent, controllers = new DestroyableSet("weak")) {
-      this.parent = parent;
-      this.controllers = controllers;
+    constructor(parent, controllers = new DestroyableSet('weak')) {
+      this.parent = parent
+      this.controllers = controllers
     }
     createController(options) {
-      const controller = new Controller(this, options);
-      this.controllers.add(controller);
-      return controller;
+      const controller = new Controller(this, options)
+      this.controllers.add(controller)
+      return controller
     }
     createState(initialValue, options) {
-      const state = new State(this, initialValue, options);
-      this.controllers.add(state);
-      return state;
+      const state = new State(this, initialValue, options)
+      this.controllers.add(state)
+      return state
     }
     createForm(t, initValuesOrLinkedState, options) {
-      const form2 = new FormState(this, t, initValuesOrLinkedState, options);
-      this.controllers.add(form2);
-      return form2;
+      const form2 = new FormState(this, t, initValuesOrLinkedState, options)
+      this.controllers.add(form2)
+      return form2
     }
     destroy() {
-      var _a2;
-      (_a2 = this.parent) == null ? void 0 : _a2.controllers.delete(this);
-      this.controllers.destroy();
+      var _a2
+      ;(_a2 = this.parent) == null ? void 0 : _a2.controllers.delete(this)
+      this.controllers.destroy()
     }
-  };
+  }
   var Controller = class extends Context {
     constructor(parent, options) {
-      super(parent, new DestroyableSet());
-      this._destroyed = false;
-      this.registeredSources = new DestroyableSet();
-      this.onDestroyListeners = new DestroyableSet();
-      this.linkedStates = /* @__PURE__ */ new Set();
-      this.eventSources = [];
-      const { name = "state", weakRef = false } = options != null ? options : {};
-      this.options = { name, weakRef };
-      this._stateId = createId(name);
+      super(parent, new DestroyableSet())
+      this._destroyed = false
+      this.registeredSources = new DestroyableSet()
+      this.onDestroyListeners = new DestroyableSet()
+      this.linkedStates = /* @__PURE__ */ new Set()
+      this.eventSources = []
+      const { name = 'state', weakRef = false } = options != null ? options : {}
+      this.options = { name, weakRef }
+      this._stateId = createId(name)
     }
     getOutputChannel() {
       if (!isDefined(this.outputChannel)) {
-        this.outputChannel = new Channel(`${this.stateId}-onChange`);
+        this.outputChannel = new Channel(`${this.stateId}-onChange`)
       }
-      return this.outputChannel;
+      return this.outputChannel
     }
     get stateId() {
-      return this._stateId;
+      return this._stateId
     }
     get destroyed() {
-      return this._destroyed;
+      return this._destroyed
     }
     idTxt(txt) {
-      return `${this.stateId}: ${txt}`;
+      return `${this.stateId}: ${txt}`
     }
     describe() {
       return {
-        name: this.stateId
-      };
+        name: this.stateId,
+      }
     }
     updateUi() {
       if (this.outputChannel) {
-        this.outputChannel.publish({ type: "updateUi" });
+        this.outputChannel.publish({ type: 'updateUi' })
       }
     }
     subscribe(cb) {
-      if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
-      return this.getOutputChannel().subscribe(cb);
+      if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
+      return this.getOutputChannel().subscribe(cb)
     }
     addLinkedState(controller, options) {
-      const value = { controller, ...options || {} };
-      this.linkedStates.add(value);
-      return () => this.linkedStates.delete(value);
+      const value = { controller, ...(options || {}) }
+      this.linkedStates.add(value)
+      return () => this.linkedStates.delete(value)
     }
     onDestroy(target) {
-      if (typeof target === "function") {
+      if (typeof target === 'function') {
         if (this.destroyed) {
-          target();
-          return () => {
-          };
+          target()
+          return () => {}
         }
         const info = {
-          type: "function",
-          destroy: target
-        };
-        return this.onDestroyListeners.add(info);
+          type: 'function',
+          destroy: target,
+        }
+        return this.onDestroyListeners.add(info)
       } else {
         if (this.destroyed) {
-          target.destroy();
-          return () => {
-          };
+          target.destroy()
+          return () => {}
         }
-        return this.onDestroyListeners.add(target);
+        return this.onDestroyListeners.add(target)
       }
     }
     /** Notify onDestroy() subscribers and call .destroy() for all attached states.
@@ -443,334 +444,344 @@
      * Safe to call multiple times.
      **/
     destroy() {
-      var _a2, _b;
-      super.destroy();
-      if (this.destroyed) return;
-      this._destroyed = true;
+      var _a2, _b
+      super.destroy()
+      if (this.destroyed) return
+      this._destroyed = true
       for (const linkedState of Array.from(this.linkedStates)) {
-        if (!isDefined((_a2 = linkedState == null ? void 0 : linkedState.events) == null ? void 0 : _a2.destroy) || linkedState.events.destroy) {
-          linkedState.controller.destroy();
+        if (
+          !isDefined((_a2 = linkedState == null ? void 0 : linkedState.events) == null ? void 0 : _a2.destroy) ||
+          linkedState.events.destroy
+        ) {
+          linkedState.controller.destroy()
         }
       }
-      this.linkedStates.clear();
-      this.registeredSources.destroy();
-      this.onDestroyListeners.destroy();
+      this.linkedStates.clear()
+      this.registeredSources.destroy()
+      this.onDestroyListeners.destroy()
       for (const es of this.eventSources) {
         if (es.weakRefUnsub) {
-          const unsub = es.weakRefUnsub.deref();
-          if (unsub) unsub();
-          es.weakRefUnsub = void 0;
+          const unsub = es.weakRefUnsub.deref()
+          if (unsub) unsub()
+          es.weakRefUnsub = void 0
         }
         if (es.unsub) {
-          es.unsub();
+          es.unsub()
         }
-        es.source = void 0;
+        es.source = void 0
       }
-      (_b = this.outputChannel) == null ? void 0 : _b.destroy();
-      this.eventSources.length = 0;
+      ;(_b = this.outputChannel) == null ? void 0 : _b.destroy()
+      this.eventSources.length = 0
     }
     addDomEvent(name, node, type, listener, options) {
-      node.addEventListener(type, listener, options);
-      const unsub = () => node.removeEventListener(type, listener, options);
+      node.addEventListener(type, listener, options)
+      const unsub = () => node.removeEventListener(type, listener, options)
       if (this.options.weakRef) {
         this.eventSources.push({
           name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
-          type: "dom",
+          type: 'dom',
           source: new WeakRef(node),
-          weakRefUnsub: new WeakRef(unsub)
-        });
+          weakRefUnsub: new WeakRef(unsub),
+        })
       } else {
         this.eventSources.push({
           name: `${name}: <${node.nodeName}>.${type} -> ${this.stateId}`,
-          type: "dom",
+          type: 'dom',
           source: new WeakRef(node),
-          unsub
-        });
+          unsub,
+        })
       }
-      return unsub;
+      return unsub
     }
     timeout(fn, at = 0) {
       const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
         new TimeoutDestroyable(() => {
-          unregisterDestroyableAndCallItsDestroy();
-          fn();
+          unregisterDestroyableAndCallItsDestroy()
+          fn()
         }, at)
-      );
-      return unregisterDestroyableAndCallItsDestroy;
+      )
+      return unregisterDestroyableAndCallItsDestroy
     }
     fetch(url2, fetchOptions) {
-      const { timeoutMs, map: map2, assertOk = true, ...fetchInit } = fetchOptions != null ? fetchOptions : {};
+      const { timeoutMs, map: map2, assertOk = true, ...fetchInit } = fetchOptions != null ? fetchOptions : {}
       const createAbortController = (destroy) => {
-        const abortController2 = new AbortController();
+        const abortController2 = new AbortController()
         const destroyAbortController2 = () => {
-          timeoutUnsub();
-          abortController2.abort();
-          destroy();
-        };
-        const timeoutUnsub = this.timeout(destroyAbortController2, timeoutMs);
-        return [abortController2, destroyAbortController2];
-      };
-      const [abortController, destroyAbortController] = isDefined(timeoutMs) ? createAbortController(() => unregisterDestroyableAndCallItsDestroy()) : [];
-      const response = fetch(url2, { ...fetchInit, signal: abortController == null ? void 0 : abortController.signal });
-      const maybeOkResponse = assertOk ? response.then((response2) => {
-        if (typeof assertOk === "function" && assertOk(response2) === false || !response2.ok) {
-          const cause = { errorResponse: response2 };
-          throw cause;
+          timeoutUnsub()
+          abortController2.abort()
+          destroy()
         }
-        return response2;
-      }) : response;
+        const timeoutUnsub = this.timeout(destroyAbortController2, timeoutMs)
+        return [abortController2, destroyAbortController2]
+      }
+      const [abortController, destroyAbortController] = isDefined(timeoutMs)
+        ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
+        : []
+      const response = fetch(url2, {
+        ...fetchInit,
+        signal: abortController == null ? void 0 : abortController.signal,
+      })
+      const maybeOkResponse = assertOk
+        ? response.then((response2) => {
+            if ((typeof assertOk === 'function' && assertOk(response2) === false) || !response2.ok) {
+              const cause = { errorResponse: response2 }
+              throw cause
+            }
+            return response2
+          })
+        : response
       const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
         new FetchDestroyable(url2, timeoutMs, maybeOkResponse, () => {
-          unregisterDestroyableAndCallItsDestroy();
-          destroyAbortController == null ? void 0 : destroyAbortController();
+          unregisterDestroyableAndCallItsDestroy()
+          destroyAbortController == null ? void 0 : destroyAbortController()
         })
-      );
-      maybeOkResponse.finally(unregisterDestroyableAndCallItsDestroy);
+      )
+      maybeOkResponse.finally(unregisterDestroyableAndCallItsDestroy)
       if (map2) {
         const mappedPromise = (async () => {
-          return map2(maybeOkResponse);
-        })();
-        return new PromiseDestroy(mappedPromise, unregisterDestroyableAndCallItsDestroy);
+          return map2(maybeOkResponse)
+        })()
+        return new PromiseDestroy(mappedPromise, unregisterDestroyableAndCallItsDestroy)
       }
-      return new PromiseDestroy(maybeOkResponse, unregisterDestroyableAndCallItsDestroy);
+      return new PromiseDestroy(maybeOkResponse, unregisterDestroyableAndCallItsDestroy)
     }
-  };
+  }
   var State = class extends Controller {
     constructor(parent, initialValue, options) {
-      super(parent, options);
-      this.value = initialValue;
+      super(parent, options)
+      this.value = initialValue
     }
     get() {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot get value"));
-      return this.value;
+      if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot get value'))
+      return this.value
     }
     getOnChange() {
       if (!isDefined(this.onChange)) {
-        this.onChange = new Channel(`${this.stateId}-onChange`);
+        this.onChange = new Channel(`${this.stateId}-onChange`)
       }
-      return this.onChange;
+      return this.onChange
     }
     set(newObj) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot set() value"));
-      const old = this.value;
-      const finalObj = typeof newObj === "function" ? newObj(this.value) : newObj;
-      if (shallowEqual(old, finalObj)) return;
-      this.value = finalObj;
-      this.getOnChange().publish(finalObj, old);
+      if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot set() value'))
+      const old = this.value
+      const finalObj = typeof newObj === 'function' ? newObj(this.value) : newObj
+      if (shallowEqual(old, finalObj)) return
+      this.value = finalObj
+      this.getOnChange().publish(finalObj, old)
     }
     update(update) {
-      if (this.destroyed) throw new Error(this.idTxt("State destroyed. Cannot update() value"));
-      if (typeof this.value !== "object") {
+      if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
+      if (typeof this.value !== 'object') {
       }
-      const finalUpdate = typeof update === "function" ? update(this.value) : update;
-      this.set({ ...this.value, ...finalUpdate });
+      const finalUpdate = typeof update === 'function' ? update(this.value) : update
+      this.set({ ...this.value, ...finalUpdate })
     }
     onValueChange(cb) {
-      if (this.destroyed) throw new Error(this.idTxt("Cannot subscribe to destroyed state"));
-      return this.getOnChange().subscribe(cb);
+      if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
+      return this.getOnChange().subscribe(cb)
     }
     destroy() {
-      var _a2;
-      super.destroy();
-      (_a2 = this.onChange) == null ? void 0 : _a2.destroy();
+      var _a2
+      super.destroy()
+      ;(_a2 = this.onChange) == null ? void 0 : _a2.destroy()
     }
-  };
+  }
   var FormState = class extends State {
     constructor(parent, t, initValuesOrLinkedState, options) {
-      const { validate, ...stateOptions } = options || {};
-      const inputs = collectFormsInputs(t);
+      const { validate, ...stateOptions } = options || {}
+      const inputs = collectFormsInputs(t)
       if (initValuesOrLinkedState instanceof State) {
-        const initState = initValuesOrLinkedState.get();
-        const init = {};
-        inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)));
-        super(parent, init, stateOptions);
-        this.configureInputs(this, inputs);
+        const initState = initValuesOrLinkedState.get()
+        const init = {}
+        inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)))
+        super(parent, init, stateOptions)
+        this.configureInputs(this, inputs)
         this.onValueChange((newState) => {
           if (validate && !validate(newState)) {
-            return;
+            return
           }
-          initValuesOrLinkedState.update(newState);
-        });
+          initValuesOrLinkedState.update(newState)
+        })
       } else {
-        super(parent, initValuesOrLinkedState, stateOptions);
+        super(parent, initValuesOrLinkedState, stateOptions)
         if (validate) {
-          const validInputValuesState = this.createState(initValuesOrLinkedState, { name: "valid input values" });
+          const validInputValuesState = this.createState(initValuesOrLinkedState, { name: 'valid input values' })
           validInputValuesState.onValueChange((newState) => {
             if (!validate(newState)) {
-              return;
+              return
             }
-            this.set(newState);
-          });
-          this.configureInputs(validInputValuesState, inputs);
+            this.set(newState)
+          })
+          this.configureInputs(validInputValuesState, inputs)
         } else {
-          this.configureInputs(this, inputs);
+          this.configureInputs(this, inputs)
         }
       }
     }
     configureInputs(inputState, inputs) {
       for (const [path, input2] of inputs) {
-        const state = inputState.get();
-        const value = getByPath(state, path);
+        const state = inputState.get()
+        const value = getByPath(state, path)
         if (input2.node instanceof HTMLInputElement) {
-          input2.node.value = value;
+          input2.node.value = value
         }
         inputState.addDomEvent(path, input2.node, input2.key, (ev) => {
-          const value2 = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node);
+          const value2 = input2.map ? input2.map(readRaw(input2.node)) : readRaw(input2.node)
           if (input2.validate && !input2.validate(value2, input2.node, ev)) {
-            return;
+            return
           }
-          const newState = copyAndSet(inputState.get(), path, value2);
-          inputState.set(newState);
-        });
+          const newState = copyAndSet(inputState.get(), path, value2)
+          inputState.set(newState)
+        })
       }
     }
     onsubmit(root, listener, options) {
       return this.addDomEvent(
-        "submit",
+        'submit',
         root,
-        "submit",
+        'submit',
         (ev) => {
-          ev.preventDefault();
-          listener(ev);
+          ev.preventDefault()
+          listener(ev)
         },
         options
-      );
+      )
     }
-  };
+  }
 
   // src/index.ts
-  var defaultContext = new Context();
-  var getDefaultContext = () => defaultContext;
-  var createController = defaultContext.createController.bind(defaultContext);
-  var createState = defaultContext.createState.bind(defaultContext);
-  var createForm = defaultContext.createForm.bind(defaultContext);
+  var defaultContext = new Context()
+  var getDefaultContext = () => defaultContext
+  var createController = defaultContext.createController.bind(defaultContext)
+  var createState = defaultContext.createState.bind(defaultContext)
+  var createForm = defaultContext.createForm.bind(defaultContext)
 
   // src/domBuilderEvents.ts
   var Events = class {
     constructor(events2) {
-      this.events = events2;
+      this.events = events2
     }
-  };
+  }
   function events(events2) {
-    return new Events(events2 instanceof Events || "events" in events2 ? events2.events : events2);
+    return new Events(events2 instanceof Events || 'events' in events2 ? events2.events : events2)
   }
   function setEvents(node, arg) {
-    const ev = arg instanceof Events ? arg : events(arg);
+    const ev = arg instanceof Events ? arg : events(arg)
     Object.entries(ev.events).forEach(([key, fn]) => {
       node.addEventListener(key, (event) => {
-        fn == null ? void 0 : fn({ node, event });
-      });
-    });
+        fn == null ? void 0 : fn({ node, event })
+      })
+    })
   }
 
   // src/domBuilderStyles.ts
   function setClass(element, argValue) {
-    const classList = element.classList;
+    const classList = element.classList
     const visit = (argValue2) => {
       if (Array.isArray(argValue2)) {
-        argValue2.forEach((arg) => visit(arg));
+        argValue2.forEach((arg) => visit(arg))
       } else {
-        classList.add(...argValue2.split(" "));
-      }
-    };
-    visit(argValue);
-  }
-  function styles(...inputs) {
-    const flat = {};
-    for (const input2 of Array.from(inputs).flat()) {
-      if (input2 instanceof Styles) {
-        Object.assign(flat, input2.styles);
-      } else {
-        Object.assign(flat, input2);
+        classList.add(...argValue2.split(' '))
       }
     }
-    return new Styles(flat);
+    visit(argValue)
+  }
+  function styles(...inputs) {
+    const flat = {}
+    for (const input2 of Array.from(inputs).flat()) {
+      if (input2 instanceof Styles) {
+        Object.assign(flat, input2.styles)
+      } else {
+        Object.assign(flat, input2)
+      }
+    }
+    return new Styles(flat)
   }
   var Styles = class {
     constructor(styles2) {
-      this.styles = styles2;
+      this.styles = styles2
     }
-  };
+  }
   var UNIT_PX_PROPS = /* @__PURE__ */ new Set([
     // common layout/size props
-    "width",
-    "height",
-    "top",
-    "left",
-    "right",
-    "bottom",
-    "minWidth",
-    "minHeight",
-    "maxWidth",
-    "maxHeight",
-    "margin",
-    "marginTop",
-    "marginBottom",
-    "marginLeft",
-    "marginRight",
-    "padding",
-    "paddingTop",
-    "paddingBottom",
-    "paddingLeft",
-    "paddingRight",
-    "gap",
-    "rowGap",
-    "columnGap",
-    "fontSize",
-    "borderWidth",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "borderRadius",
-    "outlineWidth",
-    "letterSpacing",
-    "lineHeight"
-  ]);
+    'width',
+    'height',
+    'top',
+    'left',
+    'right',
+    'bottom',
+    'minWidth',
+    'minHeight',
+    'maxWidth',
+    'maxHeight',
+    'margin',
+    'marginTop',
+    'marginBottom',
+    'marginLeft',
+    'marginRight',
+    'padding',
+    'paddingTop',
+    'paddingBottom',
+    'paddingLeft',
+    'paddingRight',
+    'gap',
+    'rowGap',
+    'columnGap',
+    'fontSize',
+    'borderWidth',
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'borderRadius',
+    'outlineWidth',
+    'letterSpacing',
+    'lineHeight',
+  ])
   function convertPrimitiveValue(prop, val) {
-    if (val === null || val === void 0) return "";
-    if (typeof val === "number") {
-      if (prop.startsWith("--")) return String(val);
-      if (UNIT_PX_PROPS.has(prop)) return `${val}px`;
-      return String(val);
+    if (val === null || val === void 0) return ''
+    if (typeof val === 'number') {
+      if (prop.startsWith('--')) return String(val)
+      if (UNIT_PX_PROPS.has(prop)) return `${val}px`
+      return String(val)
     }
-    return String(val);
+    return String(val)
   }
   function convertArrayValue(prop, arr) {
-    const flat = [];
+    const flat = []
     for (const v of arr) {
       if (Array.isArray(v)) {
-        for (const vv of v) flat.push(vv);
+        for (const vv of v) flat.push(vv)
       } else {
-        flat.push(v);
+        flat.push(v)
       }
     }
-    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2));
-    return parts.join(", ");
+    const parts = flat.map((p2) => convertPrimitiveValue(prop, p2))
+    return parts.join(', ')
   }
   function setStyle(el, ...inputs) {
     for (const style2 of inputs) {
       for (const key in style2) {
-        if (!Object.prototype.hasOwnProperty.call(style2, key)) continue;
-        const raw = style2[key];
+        if (!Object.prototype.hasOwnProperty.call(style2, key)) continue
+        const raw = style2[key]
         if (isDefined(raw)) {
-          if (key.startsWith("--")) {
+          if (key.startsWith('--')) {
             if (Array.isArray(raw)) {
-              const val = convertArrayValue(key, raw);
-              el.style.setProperty(key, val);
+              const val = convertArrayValue(key, raw)
+              el.style.setProperty(key, val)
             } else {
-              const val = convertPrimitiveValue(key, raw);
-              el.style.setProperty(key, val);
+              const val = convertPrimitiveValue(key, raw)
+              el.style.setProperty(key, val)
             }
-            continue;
+            continue
           }
-          let finalValue;
+          let finalValue
           if (Array.isArray(raw)) {
-            finalValue = convertArrayValue(key, raw);
+            finalValue = convertArrayValue(key, raw)
           } else {
-            finalValue = convertPrimitiveValue(key, raw);
+            finalValue = convertPrimitiveValue(key, raw)
           }
-          el.style[key] = finalValue;
+          el.style[key] = finalValue
         }
       }
     }
@@ -779,507 +790,518 @@
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
-      this._node = node;
+      this._node = node
     }
     get node() {
-      return this._node;
+      return this._node
     }
-  };
+  }
 
   // src/domBuilder.ts
   function addItems(element, ...args) {
     args.forEach((arg) => {
       if (Array.isArray(arg)) {
-        addItems(element, ...arg);
+        addItems(element, ...arg)
       } else if (isNode(arg)) {
-        element.appendChild(arg);
+        element.appendChild(arg)
       } else if (arg instanceof WrappedNode) {
-        element.appendChild(arg.node);
+        element.appendChild(arg.node)
       } else if (arg instanceof Styles) {
-        setStyle(element, arg.styles);
+        setStyle(element, arg.styles)
       } else if (arg instanceof Events) {
-        setEvents(element, arg);
-      } else if (typeof arg === "string") {
-        element.appendChild(getDocument().createTextNode(arg));
-      } else if (typeof arg === "object") {
+        setEvents(element, arg)
+      } else if (typeof arg === 'string') {
+        element.appendChild(getDocument().createTextNode(arg))
+      } else if (typeof arg === 'object') {
         Object.entries(arg).forEach(([key, argValue]) => {
-          if (key === "class") {
-            setClass(element, argValue);
-          } else if (key === "styles") {
-            setStyle(element, argValue);
-          } else if (key === "events") {
-            setEvents(element, argValue);
-          } else if (key.startsWith("on") && typeof argValue === "function") {
-            const event = key.substring(2).toLowerCase();
-            element.addEventListener(event, argValue);
+          if (key === 'class') {
+            setClass(element, argValue)
+          } else if (key === 'styles') {
+            setStyle(element, argValue)
+          } else if (key === 'events') {
+            setEvents(element, argValue)
+          } else if (key.startsWith('on') && typeof argValue === 'function') {
+            const event = key.substring(2).toLowerCase()
+            element.addEventListener(event, argValue)
           } else {
-            element.setAttribute(key, argValue);
+            element.setAttribute(key, argValue)
           }
-        });
+        })
       }
-    });
+    })
   }
-  var doc = typeof document !== "undefined" ? document : void 0;
+  var doc = typeof document !== 'undefined' ? document : void 0
   var isNode = (e) => {
-    return typeof document !== "undefined" && !![HTMLElement, Text].find((value) => e instanceof value);
-  };
+    return typeof document !== 'undefined' && !![HTMLElement, Text].find((value) => e instanceof value)
+  }
   function getDocument() {
     if (doc) {
-      return doc;
+      return doc
     }
-    throw new Error("document is undefined");
+    throw new Error('document is undefined')
   }
   function createElement(tagName, ...args) {
-    const element = getDocument().createElement(tagName);
-    addItems(element, ...args);
-    return element;
+    const element = getDocument().createElement(tagName)
+    addItems(element, ...args)
+    return element
   }
-  var createElementFn = (tagName) => (...args) => createElement(tagName, ...args);
-  var a = createElementFn("a");
-  var abbr = createElementFn("abbr");
-  var address = createElementFn("address");
-  var area = createElementFn("area");
-  var article = createElementFn("article");
-  var aside = createElementFn("aside");
-  var audio = createElementFn("audio");
-  var b = createElementFn("b");
-  var base = createElementFn("base");
-  var bdi = createElementFn("bdi");
-  var bdo = createElementFn("bdo");
-  var blockquote = createElementFn("blockquote");
-  var body = createElementFn("body");
-  var br = createElementFn("br");
-  var button = createElementFn("button");
-  var canvas = createElementFn("canvas");
-  var caption = createElementFn("caption");
-  var cite = createElementFn("cite");
-  var code = createElementFn("code");
-  var col = createElementFn("col");
-  var colgroup = createElementFn("colgroup");
-  var data = createElementFn("data");
-  var datalist = createElementFn("datalist");
-  var dd = createElementFn("dd");
-  var del = createElementFn("del");
-  var details = createElementFn("details");
-  var dfn = createElementFn("dfn");
-  var dialog = createElementFn("dialog");
-  var div = createElementFn("div");
-  var dl = createElementFn("dl");
-  var dt = createElementFn("dt");
-  var em = createElementFn("em");
-  var embed = createElementFn("embed");
-  var fieldset = createElementFn("fieldset");
-  var figcaption = createElementFn("figcaption");
-  var figure = createElementFn("figure");
-  var footer = createElementFn("footer");
-  var form = createElementFn("form");
-  var h1 = createElementFn("h1");
-  var h2 = createElementFn("h2");
-  var h3 = createElementFn("h3");
-  var h4 = createElementFn("h4");
-  var h5 = createElementFn("h5");
-  var h6 = createElementFn("h6");
-  var head = createElementFn("head");
-  var header = createElementFn("header");
-  var hgroup = createElementFn("hgroup");
-  var hr = createElementFn("hr");
-  var html = createElementFn("html");
-  var i = createElementFn("i");
-  var iframe = createElementFn("iframe");
-  var img = createElementFn("img");
-  var input = createElementFn("input");
-  var ins = createElementFn("ins");
-  var kbd = createElementFn("kbd");
-  var label = createElementFn("label");
-  var legend = createElementFn("legend");
-  var li = createElementFn("li");
-  var link = createElementFn("link");
-  var main = createElementFn("main");
-  var map = createElementFn("map");
-  var mark = createElementFn("mark");
-  var menu = createElementFn("menu");
-  var meta = createElementFn("meta");
-  var meter = createElementFn("meter");
-  var nav = createElementFn("nav");
-  var noscript = createElementFn("noscript");
-  var object = createElementFn("object");
-  var ol = createElementFn("ol");
-  var optgroup = createElementFn("optgroup");
-  var option = createElementFn("option");
-  var output = createElementFn("output");
-  var p = createElementFn("p");
-  var picture = createElementFn("picture");
-  var pre = createElementFn("pre");
-  var progress = createElementFn("progress");
-  var q = createElementFn("q");
-  var rp = createElementFn("rp");
-  var rt = createElementFn("rt");
-  var ruby = createElementFn("ruby");
-  var s = createElementFn("s");
-  var samp = createElementFn("samp");
-  var script = createElementFn("script");
-  var search = createElementFn("search");
-  var section = createElementFn("section");
-  var select = createElementFn("select");
-  var slot = createElementFn("slot");
-  var small = createElementFn("small");
-  var source = createElementFn("source");
-  var span = createElementFn("span");
-  var strong = createElementFn("strong");
-  var style = createElementFn("style");
-  var sub = createElementFn("sub");
-  var summary = createElementFn("summary");
-  var sup = createElementFn("sup");
-  var table = createElementFn("table");
-  var tbody = createElementFn("tbody");
-  var td = createElementFn("td");
-  var template = createElementFn("template");
-  var textarea = createElementFn("textarea");
-  var tfoot = createElementFn("tfoot");
-  var th = createElementFn("th");
-  var thead = createElementFn("thead");
-  var time = createElementFn("time");
-  var title = createElementFn("title");
-  var tr = createElementFn("tr");
-  var track = createElementFn("track");
-  var u = createElementFn("u");
-  var ul = createElementFn("ul");
-  var varE = createElementFn("var");
-  var video = createElementFn("video");
-  var wbr = createElementFn("wbr");
-  var text = (arg = "") => getDocument().createTextNode(String(arg));
-  var createInputFn = (type) => (...args) => createElement("input", { type }, ...args);
-  var inputButton = createInputFn("button");
-  var checkbox = createInputFn("checkbox");
-  var color = createInputFn("color");
-  var date = createInputFn("date");
-  var datetimeLocal = createInputFn("datetime-local");
-  var email = createInputFn("email");
-  var hidden = createInputFn("hidden");
-  var image = createInputFn("image");
-  var month = createInputFn("month");
-  var number = createInputFn("number");
-  var password = createInputFn("password");
-  var radio = createInputFn("radio");
-  var range = createInputFn("range");
-  var reset = createInputFn("reset");
-  var inputSearch = createInputFn("search");
-  var submit = createInputFn("submit");
-  var tel = createInputFn("tel");
-  var inputText = createInputFn("text");
-  var inputTime = createInputFn("time");
-  var url = createInputFn("url");
-  var week = createInputFn("week");
+  var createElementFn =
+    (tagName) =>
+    (...args) =>
+      createElement(tagName, ...args)
+  var a = createElementFn('a')
+  var abbr = createElementFn('abbr')
+  var address = createElementFn('address')
+  var area = createElementFn('area')
+  var article = createElementFn('article')
+  var aside = createElementFn('aside')
+  var audio = createElementFn('audio')
+  var b = createElementFn('b')
+  var base = createElementFn('base')
+  var bdi = createElementFn('bdi')
+  var bdo = createElementFn('bdo')
+  var blockquote = createElementFn('blockquote')
+  var body = createElementFn('body')
+  var br = createElementFn('br')
+  var button = createElementFn('button')
+  var canvas = createElementFn('canvas')
+  var caption = createElementFn('caption')
+  var cite = createElementFn('cite')
+  var code = createElementFn('code')
+  var col = createElementFn('col')
+  var colgroup = createElementFn('colgroup')
+  var data = createElementFn('data')
+  var datalist = createElementFn('datalist')
+  var dd = createElementFn('dd')
+  var del = createElementFn('del')
+  var details = createElementFn('details')
+  var dfn = createElementFn('dfn')
+  var dialog = createElementFn('dialog')
+  var div = createElementFn('div')
+  var dl = createElementFn('dl')
+  var dt = createElementFn('dt')
+  var em = createElementFn('em')
+  var embed = createElementFn('embed')
+  var fieldset = createElementFn('fieldset')
+  var figcaption = createElementFn('figcaption')
+  var figure = createElementFn('figure')
+  var footer = createElementFn('footer')
+  var form = createElementFn('form')
+  var h1 = createElementFn('h1')
+  var h2 = createElementFn('h2')
+  var h3 = createElementFn('h3')
+  var h4 = createElementFn('h4')
+  var h5 = createElementFn('h5')
+  var h6 = createElementFn('h6')
+  var head = createElementFn('head')
+  var header = createElementFn('header')
+  var hgroup = createElementFn('hgroup')
+  var hr = createElementFn('hr')
+  var html = createElementFn('html')
+  var i = createElementFn('i')
+  var iframe = createElementFn('iframe')
+  var img = createElementFn('img')
+  var input = createElementFn('input')
+  var ins = createElementFn('ins')
+  var kbd = createElementFn('kbd')
+  var label = createElementFn('label')
+  var legend = createElementFn('legend')
+  var li = createElementFn('li')
+  var link = createElementFn('link')
+  var main = createElementFn('main')
+  var map = createElementFn('map')
+  var mark = createElementFn('mark')
+  var menu = createElementFn('menu')
+  var meta = createElementFn('meta')
+  var meter = createElementFn('meter')
+  var nav = createElementFn('nav')
+  var noscript = createElementFn('noscript')
+  var object = createElementFn('object')
+  var ol = createElementFn('ol')
+  var optgroup = createElementFn('optgroup')
+  var option = createElementFn('option')
+  var output = createElementFn('output')
+  var p = createElementFn('p')
+  var picture = createElementFn('picture')
+  var pre = createElementFn('pre')
+  var progress = createElementFn('progress')
+  var q = createElementFn('q')
+  var rp = createElementFn('rp')
+  var rt = createElementFn('rt')
+  var ruby = createElementFn('ruby')
+  var s = createElementFn('s')
+  var samp = createElementFn('samp')
+  var script = createElementFn('script')
+  var search = createElementFn('search')
+  var section = createElementFn('section')
+  var select = createElementFn('select')
+  var slot = createElementFn('slot')
+  var small = createElementFn('small')
+  var source = createElementFn('source')
+  var span = createElementFn('span')
+  var strong = createElementFn('strong')
+  var style = createElementFn('style')
+  var sub = createElementFn('sub')
+  var summary = createElementFn('summary')
+  var sup = createElementFn('sup')
+  var table = createElementFn('table')
+  var tbody = createElementFn('tbody')
+  var td = createElementFn('td')
+  var template = createElementFn('template')
+  var textarea = createElementFn('textarea')
+  var tfoot = createElementFn('tfoot')
+  var th = createElementFn('th')
+  var thead = createElementFn('thead')
+  var time = createElementFn('time')
+  var title = createElementFn('title')
+  var tr = createElementFn('tr')
+  var track = createElementFn('track')
+  var u = createElementFn('u')
+  var ul = createElementFn('ul')
+  var varE = createElementFn('var')
+  var video = createElementFn('video')
+  var wbr = createElementFn('wbr')
+  var text = (arg = '') => getDocument().createTextNode(String(arg))
+  var createInputFn =
+    (type) =>
+    (...args) =>
+      createElement('input', { type }, ...args)
+  var inputButton = createInputFn('button')
+  var checkbox = createInputFn('checkbox')
+  var color = createInputFn('color')
+  var date = createInputFn('date')
+  var datetimeLocal = createInputFn('datetime-local')
+  var email = createInputFn('email')
+  var hidden = createInputFn('hidden')
+  var image = createInputFn('image')
+  var month = createInputFn('month')
+  var number = createInputFn('number')
+  var password = createInputFn('password')
+  var radio = createInputFn('radio')
+  var range = createInputFn('range')
+  var reset = createInputFn('reset')
+  var inputSearch = createInputFn('search')
+  var submit = createInputFn('submit')
+  var tel = createInputFn('tel')
+  var inputText = createInputFn('text')
+  var inputTime = createInputFn('time')
+  var url = createInputFn('url')
+  var week = createInputFn('week')
   function setElementToId(targetId, element) {
-    const targetElement = getDocument().getElementById(targetId);
+    const targetElement = getDocument().getElementById(targetId)
     if (targetElement) {
-      targetElement.replaceChildren(element);
+      targetElement.replaceChildren(element)
     } else {
-      console.error(`Target element with ID "${targetId}" not found!`);
+      console.error(`Target element with ID "${targetId}" not found!`)
     }
   }
 
   // src/demos/01_domBuilderStateDemo.ts
   function domBuilderWithState() {
     const createNodes = (state) => {
-      const info = text();
+      const info = text()
       const root = p(
-        "Click this text to update counter",
+        'Click this text to update counter',
         {
           styles: {
-            color: "red"
+            color: 'red',
           },
           events: {
             click() {
-              state.set((cur) => ({ total: cur.total + 1 }));
-            }
-          }
+              state.set((cur) => ({ total: cur.total + 1 }))
+            },
+          },
         },
-        div(info, styles({ color: "green" }))
-      );
+        div(info, styles({ color: 'green' }))
+      )
       state.onValueChange((obj) => {
-        info.nodeValue = `Counter: ${obj.total}`;
-      });
-      return root;
-    };
+        info.nodeValue = `Counter: ${obj.total}`
+      })
+      return root
+    }
     function counter(state = createState({ total: 0 })) {
-      const root = createNodes(state);
+      const root = createNodes(state)
       const reset2 = button(
-        "Reset",
+        'Reset',
         events({
           click() {
-            state.set({ total: 0 });
-          }
+            state.set({ total: 0 })
+          },
         })
-      );
-      state.updateUi();
-      return div(root, reset2);
+      )
+      state.updateUi()
+      return div(root, reset2)
     }
-    return counter();
+    return counter()
   }
 
   // src/fetch.ts
   function isErrorResponse(item) {
-    return "errorResponse" in item;
+    return 'errorResponse' in item
   }
 
   // src/demos/02_fetchDemo.ts
   function fetchDemo() {
-    const info = text("Not loaded");
-    const b2 = button("Click me to fetch!");
-    let counter = 0;
-    const setText = (s2) => info.nodeValue = s2;
-    const handleError = (reason) => setText(
-      isErrorResponse(reason) ? `There was an error, response.status is ${reason.errorResponse.status}` : `There was an error, response.status is ${reason}`
-    );
-    const state = createController();
-    state.addDomEvent("start fetch", b2, "click", () => {
-      counter++;
-      setText("Loading...");
-      state.fetch("test.json", { timeoutMs: 1e3 }).then(() => setText(`Loaded ok.`), handleError);
-    });
-    return div(b2, info);
+    const info = text('Not loaded')
+    const b2 = button('Click me to fetch!')
+    let counter = 0
+    const setText = (s2) => (info.nodeValue = s2)
+    const handleError = (reason) =>
+      setText(
+        isErrorResponse(reason)
+          ? `There was an error, response.status is ${reason.errorResponse.status}`
+          : `There was an error, response.status is ${reason}`
+      )
+    const state = createController()
+    state.addDomEvent('start fetch', b2, 'click', () => {
+      counter++
+      setText('Loading...')
+      state.fetch('test.json', { timeoutMs: 1e3 }).then(() => setText(`Loaded ok.`), handleError)
+    })
+    return div(b2, info)
   }
 
   // src/demos/03_formDemo.ts
   function createFormStateDemo(init = { a: 23, b: 10 }) {
-    const i1 = input();
-    const i2 = input();
-    const info = pre();
-    const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
-    const log = (s2) => info.append(`${s2}
-`);
+    const i1 = input()
+    const i2 = input()
+    const info = pre()
+    const root = form('Input 1', i1, 'Input 2', i2, input({ type: 'submit', value: 'Submit' }), info)
+    const log = (s2) =>
+      info.append(`${s2}
+`)
     const isDividable = (prefix, divider) => {
       return (n) => {
-        const isOk = n % divider === 0;
+        const isOk = n % divider === 0
         if (isOk) {
-          return true;
+          return true
         }
-        log(`${prefix} ${n} is not dividable by ${divider}`);
-        return false;
-      };
-    };
+        log(`${prefix} ${n} is not dividable by ${divider}`)
+        return false
+      }
+    }
     const formData = createForm(
       {
-        a: formEvent(i1, "keyup", (s2) => Number(s2), isDividable("a", 10)),
-        b: formEvent(i2, "keyup", (s2) => Number(s2), isDividable("b", 5))
+        a: formEvent(i1, 'keyup', (s2) => Number(s2), isDividable('a', 10)),
+        b: formEvent(i2, 'keyup', (s2) => Number(s2), isDividable('b', 5)),
       },
       init,
       {
         validate: ({ a: a2, b: b2 }) => {
-          const isOk = a2 + b2 === 15;
+          const isOk = a2 + b2 === 15
           if (isOk) {
-            log(`Form full state validation: ${a2} + ${b2}=${a2 + b2} is 15!`);
-            return true;
+            log(`Form full state validation: ${a2} + ${b2}=${a2 + b2} is 15!`)
+            return true
           }
-          log(`Form full state validation : ${a2} + ${b2}=${a2 + b2} is not 15`);
-          return false;
-        }
+          log(`Form full state validation : ${a2} + ${b2}=${a2 + b2} is not 15`)
+          return false
+        },
       }
-    );
+    )
     formData.onValueChange(({ a: a2, b: b2 }) => {
-      log(`Form data set to: a:${a2} b:${b2}`);
-    });
+      log(`Form data set to: a:${a2} b:${b2}`)
+    })
     formData.onsubmit(root, () => {
-      const { a: a2, b: b2 } = formData.get();
-      log(`Form submitted ${a2} ${b2}`);
-    });
-    formData.updateUi();
-    return root;
+      const { a: a2, b: b2 } = formData.get()
+      log(`Form submitted ${a2} ${b2}`)
+    })
+    formData.updateUi()
+    return root
   }
 
   // src/demos/channelsDemo.ts
   function channelsDemo() {
-    const state = createState({ total: 0 });
-    const channels = new ChannelRegistry();
-    const channel = channels.get("test");
-    let num = 0;
+    const state = createState({ total: 0 })
+    const channels = new ChannelRegistry()
+    const channel = channels.get('test')
+    let num = 0
     state.onDestroy(() => {
-      root.replaceChildren(t1);
-      t1.nodeValue = "T1, not destroyed!";
-    });
+      root.replaceChildren(t1)
+      t1.nodeValue = 'T1, not destroyed!'
+    })
     channel.subscribe((payload) => {
-      t1.nodeValue = `Counter ${payload.num}`;
-    });
-    state.updateUi();
-    const t1 = text("T1");
+      t1.nodeValue = `Counter ${payload.num}`
+    })
+    state.updateUi()
+    const t1 = text('T1')
     const root = p(
-      p("Click me to send message!", {
-        onclick: () => channel.publish({ num: num++ })
+      p('Click me to send message!', {
+        onclick: () => channel.publish({ num: num++ }),
       }),
       t1
-    );
-    return root;
+    )
+    return root
   }
 
   // src/demos/simpleDemos.ts
   function basicCounter() {
-    const state = createState({ total: 0 });
+    const state = createState({ total: 0 })
     function infoText(state2) {
-      const t = text();
-      state2.onValueChange((obj) => t.nodeValue = `${obj.total}`);
-      return t;
+      const t = text()
+      state2.onValueChange((obj) => (t.nodeValue = `${obj.total}`))
+      return t
     }
-    state.updateUi();
-    return p("Total: ", infoText(state), {
-      onclick: () => state.set((cur) => ({ total: cur.total + 1 }))
-    });
+    state.updateUi()
+    return p('Total: ', infoText(state), {
+      onclick: () => state.set((cur) => ({ total: cur.total + 1 })),
+    })
   }
 
   // src/demos/simpleFormDemo.ts
   function simpleForm() {
-    const domTextInput = (state, name, node, key, validate) => state.addDomEvent(name, node, "keyup", () => {
-      if (validate) {
-        if (validate(node.value)) {
-          return;
+    const domTextInput = (state, name, node, key, validate) =>
+      state.addDomEvent(name, node, 'keyup', () => {
+        if (validate) {
+          if (validate(node.value)) {
+            return
+          }
         }
-      }
-      state.set((cur) => ({ ...cur, [key]: node.value }));
-    });
-    function simpleForm2(formData = createState({ a: "23", b: "234" })) {
-      const i1 = input();
-      const i2 = input();
-      const info = pre();
-      const root = form("Input 1", i1, "Input 2", i2, input({ type: "submit", value: "Submit" }), info);
+        state.set((cur) => ({ ...cur, [key]: node.value }))
+      })
+    function simpleForm2(formData = createState({ a: '23', b: '234' })) {
+      const i1 = input()
+      const i2 = input()
+      const info = pre()
+      const root = form('Input 1', i1, 'Input 2', i2, input({ type: 'submit', value: 'Submit' }), info)
       const log = (s2) => {
         info.append(`${s2}
-`);
-        return true;
-      };
-      domTextInput(formData, "i1", i1, "a");
+`)
+        return true
+      }
+      domTextInput(formData, 'i1', i1, 'a')
       domTextInput(
         formData,
-        "i2",
+        'i2',
         i2,
-        "b",
+        'b',
         (v) => v.length % 2 === 0 && log(`b value '${v}' has wrong length ${v.length}`)
-      );
+      )
       formData.onValueChange(({ a: a2, b: b2 }) => {
-        i1.value = a2;
-        i2.value = b2;
-        log(`Form data: ${a2} ${b2}`);
-      });
-      const submitController = createController();
-      submitController.addDomEvent("submit", root, "submit", (ev) => {
-        ev.preventDefault();
-        const { a: a2, b: b2 } = formData.get();
-        log(`Form submitted ${a2} ${b2}`);
-      });
-      formData.updateUi();
-      return root;
+        i1.value = a2
+        i2.value = b2
+        log(`Form data: ${a2} ${b2}`)
+      })
+      const submitController = createController()
+      submitController.addDomEvent('submit', root, 'submit', (ev) => {
+        ev.preventDefault()
+        const { a: a2, b: b2 } = formData.get()
+        log(`Form submitted ${a2} ${b2}`)
+      })
+      formData.updateUi()
+      return root
     }
-    return simpleForm2();
+    return simpleForm2()
   }
 
   // src/demos/stateOnDestroyDemo.ts
   function onDestroyTwoNodes() {
-    const state = createState({ total: 123 });
+    const state = createState({ total: 123 })
     const info = (txt, s2) => {
-      const t = text();
-      s2.onValueChange((obj) => t.nodeValue = `${txt}: ${obj.total}`);
+      const t = text()
+      s2.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`))
       s2.onDestroy(() => {
-        t.nodeValue = `${txt}: state destroyed`;
-      });
-      return p(t);
-    };
-    const root = p(button("Click me!", { onclick: state.destroy }), info("1", state), info("2", state));
-    state.updateUi();
-    return root;
+        t.nodeValue = `${txt}: state destroyed`
+      })
+      return p(t)
+    }
+    const root = p(button('Click me!', { onclick: state.destroy }), info('1', state), info('2', state))
+    state.updateUi()
+    return root
   }
   function onDestroyParentDemo() {
-    const parent = createState({});
-    const state = createState({ total: 0 });
+    const parent = createState({})
+    const state = createState({ total: 0 })
     state.onDestroy(() => {
-      root.replaceChildren(stateInfo, parentInfo);
-      stateInfo.nodeValue = "State destroyed!";
-    });
+      root.replaceChildren(stateInfo, parentInfo)
+      stateInfo.nodeValue = 'State destroyed!'
+    })
     parent.onDestroy(() => {
-      parentInfo.nodeValue = "Parent was destroyed!";
-    });
-    parent.onDestroy(state);
-    state.updateUi();
-    const stateInfo = text("State ready");
-    const parentInfo = text("Parent ready");
-    const root = p(p("Not destroyed. Click me!", { onclick: parent.destroy }), stateInfo, parentInfo);
-    return root;
+      parentInfo.nodeValue = 'Parent was destroyed!'
+    })
+    parent.onDestroy(state)
+    state.updateUi()
+    const stateInfo = text('State ready')
+    const parentInfo = text('Parent ready')
+    const root = p(p('Not destroyed. Click me!', { onclick: parent.destroy }), stateInfo, parentInfo)
+    return root
   }
 
   // src/demos/stateTimeoutDemo.ts
   function stateTimeoutDemo() {
-    const b1 = button("Click me!");
-    const state = createController();
-    state.addDomEvent("start timeout", b1, "click", () => {
-      b1.textContent = "Waiting...";
-      state.timeout(() => b1.textContent = "Ready!", 1e3);
-    });
-    return div(b1);
+    const b1 = button('Click me!')
+    const state = createController()
+    state.addDomEvent('start timeout', b1, 'click', () => {
+      b1.textContent = 'Waiting...'
+      state.timeout(() => (b1.textContent = 'Ready!'), 1e3)
+    })
+    return div(b1)
   }
 
   // src/demos/ki-frame-demo.ts
-  var demo = (title2, fn) => ({ title: title2, fn });
+  var demo = (title2, fn) => ({ title: title2, fn })
   var demos = [
-    demo("testable counter", domBuilderWithState),
-    demo("fetch examples", fetchDemo),
-    demo("form handling with createFormState", createFormStateDemo),
-    demo("counter(), naive 2010 DOM node version", basicCounter),
-    demo("onDestroyDemo", onDestroyTwoNodes),
-    demo("onDestroyParentDemo", onDestroyParentDemo),
-    demo("channelsDemo", channelsDemo),
-    demo("simple form - form handling with state", simpleForm),
-    demo("timeout example", stateTimeoutDemo)
-  ];
+    demo('testable counter', domBuilderWithState),
+    demo('fetch examples', fetchDemo),
+    demo('form handling with createFormState', createFormStateDemo),
+    demo('counter(), naive 2010 DOM node version', basicCounter),
+    demo('onDestroyDemo', onDestroyTwoNodes),
+    demo('onDestroyParentDemo', onDestroyParentDemo),
+    demo('channelsDemo', channelsDemo),
+    demo('simple form - form handling with state', simpleForm),
+    demo('timeout example', stateTimeoutDemo),
+  ]
   function demolist(demos2) {
-    const demoRowFunctionStringSearchIndex = demos2.map((demo2) => demo2.fn.toString().toLowerCase());
+    const demoRowFunctionStringSearchIndex = demos2.map((demo2) => demo2.fn.toString().toLowerCase())
     const rows = demos2.map((demo2) => {
-      const target = td();
-      const src = td();
+      const target = td()
+      const src = td()
       const launchDemo = button(`Launch ${demo2.fn.name}`, {
         onclick: () => {
-          target.replaceChildren(demo2.fn());
-          src.replaceChildren(pre(demo2.fn.toString()));
-        }
-      });
-      const row = tr(td(launchDemo, br(), demo2.title), target, src);
-      row.style = "vertical-align: baseline";
-      return row;
-    }, demo);
+          target.replaceChildren(demo2.fn())
+          src.replaceChildren(pre(demo2.fn.toString()))
+        },
+      })
+      const row = tr(td(launchDemo, br(), demo2.title), target, src)
+      row.style = 'vertical-align: baseline'
+      return row
+    }, demo)
     function filterDemos(s2) {
-      const searchString = s2.toLowerCase().trim();
+      const searchString = s2.toLowerCase().trim()
       demoRowFunctionStringSearchIndex.forEach((demoFn, index) => {
         if (searchString.length > 2) {
-          rows[index].hidden = demoFn.indexOf(searchString) === -1;
+          rows[index].hidden = demoFn.indexOf(searchString) === -1
         }
         if (searchString.length === 0) {
-          rows[index].hidden = false;
+          rows[index].hidden = false
         }
-      });
+      })
     }
-    const state = createController();
-    const search2 = input({ type: "search", value: location.hash.substring(1) });
-    state.addDomEvent("search", search2, "keyup", () => {
-      const s2 = search2.value;
-      location.hash = s2;
-      filterDemos(s2);
-    });
-    filterDemos(location.hash.substring(1));
+    const state = createController()
+    const search2 = input({ type: 'search', value: location.hash.substring(1) })
+    state.addDomEvent('search', search2, 'keyup', () => {
+      const s2 = search2.value
+      location.hash = s2
+      filterDemos(s2)
+    })
+    filterDemos(location.hash.substring(1))
     return div(
       search2,
       hr(),
       table(rows),
       hr(),
-      button("log context", {
+      button('log context', {
         onclick: () => {
           if (window.gc) {
-            const original = Array.from(getDefaultContext().controllers.all()).length;
-            window.gc();
+            const original = Array.from(getDefaultContext().controllers.all()).length
+            window.gc()
             console.log(
               `Ran window.gc(). Controller count before ${original} after ${Array.from(getDefaultContext().controllers.all()).length}`
-            );
+            )
           }
-          console.log(getDefaultContext());
-        }
+          console.log(getDefaultContext())
+        },
       })
-    );
+    )
   }
-  setElementToId("app", demolist(demos));
-})();
+  setElementToId('app', demolist(demos))
+})()

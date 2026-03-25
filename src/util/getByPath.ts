@@ -1,19 +1,8 @@
 // ---------- types ----------
-type PathSegment = string | number;
-type Path = string | Array<string | number>;
+type Path = string | Array<string | number>
 
 // Split a dot-string literal into tuple of string segments
-type SplitDot<S extends string> = S extends "" ? [] : S extends `${infer H}.${infer R}` ? [H, ...SplitDot<R>] : [S];
-
-// Normalize segment types: numeric string -> number
-type NormalizeSeg<S> = S extends `${infer N extends number}` ? N : S extends string ? S : S;
-
-// Convert either an array path or a dot-string literal into a tuple type
-type ToTuple<P> = P extends readonly (infer U)[]
-  ? { [K in keyof P]: P[K] } & readonly unknown[]
-  : P extends string
-    ? SplitDot<P>
-    : never;
+type SplitDot<S extends string> = S extends '' ? [] : S extends `${infer H}.${infer R}` ? [H, ...SplitDot<R>] : [S]
 
 // Recursively resolve the path tuple against object type T
 type PathValueFromTuple<T, TP extends readonly any[]> = TP extends []
@@ -30,14 +19,14 @@ type PathValueFromTuple<T, TP extends readonly any[]> = TP extends []
             ? PathValueFromTuple<Item2, R>
             : unknown
           : unknown
-    : unknown;
+    : unknown
 
 // Public PathValue: use tuple inference when possible
 type PathValue<T, P extends Path> = P extends readonly any[]
   ? PathValueFromTuple<T, P>
   : P extends string
     ? PathValueFromTuple<T, SplitDot<P>>
-    : unknown;
+    : unknown
 
 // ---------- runtime: getByPath ----------
 
@@ -49,22 +38,22 @@ type PathValue<T, P extends Path> = P extends readonly any[]
  * Typed: when you pass a tuple/array literal (as const), TypeScript infers the return type.
  */
 export function getByPath<T, P extends Path>(obj: T, path: P): PathValue<T, P> | undefined {
-  if (obj == null) return undefined as any;
+  if (obj == null) return undefined
 
-  let segments: (string | number)[] = [];
+  let segments: (string | number)[] = []
   if (Array.isArray(path)) {
-    segments = (path as Array<string | number>).map((p) => (typeof p === "string" && /^\d+$/.test(p) ? Number(p) : p));
-  } else if (typeof path === "string") {
-    if (path === "") return obj as any;
-    segments = path.split(".").map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg));
+    segments = (path as Array<string | number>).map((p) => (typeof p === 'string' && /^\d+$/.test(p) ? Number(p) : p))
+  } else if (typeof path === 'string') {
+    if (path === '') return obj as any
+    segments = path.split('.').map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg))
   } else {
-    return undefined as any;
+    return undefined as any
   }
 
-  let cur: any = obj;
+  let cur: any = obj
   for (const seg of segments) {
-    if (cur == null) return undefined as any;
-    cur = cur[seg as any];
+    if (cur == null) return undefined as any
+    cur = cur[seg as any]
   }
-  return cur as PathValue<T, P>;
+  return cur as PathValue<T, P>
 }
