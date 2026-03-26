@@ -1,4 +1,3 @@
-'use strict'
 ;(() => {
   // src/util/objectIdCounter.ts
   var runningId = 0
@@ -517,10 +516,7 @@
       const [abortController, destroyAbortController] = isDefined(timeoutMs)
         ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
         : []
-      const response = fetch(url2, {
-        ...fetchInit,
-        signal: abortController == null ? void 0 : abortController.signal,
-      })
+      const response = fetch(url2, { ...fetchInit, signal: abortController == null ? void 0 : abortController.signal })
       const maybeOkResponse = assertOk
         ? response.then((response2) => {
             if ((typeof assertOk === 'function' && assertOk(response2) === false) || !response2.ok) {
@@ -762,7 +758,7 @@
   function setStyle(el, ...inputs) {
     for (const style2 of inputs) {
       for (const key in style2) {
-        if (!Object.prototype.hasOwnProperty.call(style2, key)) continue
+        if (!Object.hasOwn(style2, key)) continue
         const raw = style2[key]
         if (isDefined(raw)) {
           if (key.startsWith('--')) {
@@ -790,10 +786,7 @@
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
-      this._node = node
-    }
-    get node() {
-      return this._node
+      this.node = node
     }
   }
 

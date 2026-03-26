@@ -331,6 +331,10 @@ export class State<Value> extends Controller {
     return this.getOnChange().subscribe(cb)
   }
 
+  republish() {
+    this.getOnChange().publish(this.value, this.value)
+  }
+
   override destroy() {
     super.destroy()
     this.onChange?.destroy()

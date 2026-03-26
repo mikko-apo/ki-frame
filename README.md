@@ -30,26 +30,44 @@ fully accessible. It simplifies common patterns while maintaining direct interac
 
 # Sponsors
 
-# Overview
+# Building an app with ki-frame
+
+1. Use domBuilder API to construct the DOM tree
+2. Create components to split up the application to sensible parts. Make components that use smaller components. Compose
+   the app by using the components.
+3. Use the additional ki-frame features to reduce development time, effort and errors
+
+- state() for sharing state between components
+- automated cleanup for components, DOM nodes, fetches and other types
+- channel() for publishing and receiving events
 
 ## domBuilder
 
-A concise, expressive utility for constructing and managing DOM trees:
+A concise, expressive utility API for constructing DOM trees:
 
 - Simple syntax for creating DOM nodes and hierarchies
-- Extended API for listeners `events()` and inline `styles()` and classes
+- Combines element.appendChild(), element.classList.add(), element.style.setProperty(), element.addEventListener(), element.setAttribute(),
+  and getDocument().createTextNode() in to single API
+  - for building node trees
+- for updating node's children, styles, classList, attributes,
 
 ```typescript
-p('Click this text to update counter', {
-  styles: {
-    color: 'red',
-  },
-  events: {
-    click() {
-      state.set((cur) => ({ total: cur.total + 1 }))
+let total = 0
+const info = text('no clicks :(')
+return p(
+  'Click this text to update counter',
+  {
+    styles: {
+      color: 'red',
+    },
+    events: {
+      click() {
+        info.textContent = `Counter: ${++total}`
+      },
     },
   },
-})
+  info
+)
 ```
 
 More information:
@@ -60,9 +78,13 @@ More information:
   - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
   - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
 
-## State
+## Component and State
 
-**State** is the central mechanism of ki-frame. It unifies application logic and resource, state and event management
+**Component** and **State** are the main building blocks of a ki-frame app.
+Component is used to store references to component's main DOM nodes and provides access to functions
+
+Component is used to manage
+It unifies application logic and resource, state and event management
 into a coherent model.
 
 **State connects all the browser side components and app logic together**:
@@ -423,6 +445,9 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 
 **Planned**
 
+- make dombuilder2 api that returns WrappedNodes with extended functionality
+- component
+  - more composable model for destroy etc hierarchies. create unattached component and state
 - state
   - logging of relevant things via context
   - unified model for sharing data, event signalling
