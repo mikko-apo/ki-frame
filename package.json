@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "bundle": "esbuild src/demos/ki-frame-demo.ts --bundle --outfile=docs/ki-frame-demo.js --platform=browser --target=es2019",
-    "build": "npm run typecheck && npm run bundle",
+    "build": "npm run lint && npm run typecheck && npm run bundle && npm run format",
     "dev": "tsc -w -p .",
     "format": "prettier --write .",
     "lint": "eslint",
