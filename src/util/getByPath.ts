@@ -10,7 +10,7 @@ type PathValueFromTuple<T, TP extends readonly any[]> = TP extends []
   : TP extends [infer H, ...infer R]
     ? H extends keyof T
       ? PathValueFromTuple<T[H], R>
-      : H extends `${infer N extends number}` // numeric string like "0"
+      : H extends number // numeric string like "0"
         ? T extends readonly (infer Item)[]
           ? PathValueFromTuple<Item, R>
           : unknown
@@ -40,7 +40,7 @@ type PathValue<T, P extends Path> = P extends readonly any[]
 export function getByPath<T, P extends Path>(obj: T, path: P): PathValue<T, P> | undefined {
   if (obj == null) return undefined
 
-  let segments: (string | number)[] = []
+  let segments: (string | number)[]
   if (Array.isArray(path)) {
     segments = (path as Array<string | number>).map((p) => (typeof p === 'string' && /^\d+$/.test(p) ? Number(p) : p))
   } else if (typeof path === 'string') {

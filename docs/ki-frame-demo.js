@@ -92,7 +92,7 @@
   }
   function collectFormsInputs(root) {
     const out = []
-    function visit(node, pathParts) {
+    function visit2(node, pathParts) {
       if (node == null) return
       if (node instanceof FormsInput) {
         const path = pathParts.map((p2) => String(p2)).join('.')
@@ -101,18 +101,18 @@
       }
       if (Array.isArray(node)) {
         for (let i2 = 0; i2 < node.length; i2++) {
-          visit(node[i2], [...pathParts, i2])
+          visit2(node[i2], [...pathParts, i2])
         }
         return
       }
       if (typeof node === 'object') {
         for (const key of Object.keys(node)) {
-          visit(node[key], [...pathParts, key])
+          visit2(node[key], [...pathParts, key])
         }
         return
       }
     }
-    visit(root, [])
+    visit2(root, [])
     return out
   }
   function readRaw(node) {
@@ -173,9 +173,9 @@
     }
   }
   var FetchDestroyable = class extends PromiseDestroy {
-    constructor(url2, timeoutMs, promise, destroy) {
+    constructor(url, timeoutMs, promise, destroy) {
       super(promise, destroy)
-      this.url = url2
+      this.url = url
       this.timeoutMs = timeoutMs
       this.promise = promise
       this.destroy = destroy
@@ -185,7 +185,7 @@
   // src/util/getByPath.ts
   function getByPath(obj, path) {
     if (obj == null) return void 0
-    let segments = []
+    let segments
     if (Array.isArray(path)) {
       segments = path.map((p2) => (typeof p2 === 'string' && /^\d+$/.test(p2) ? Number(p2) : p2))
     } else if (typeof path === 'string') {
@@ -502,7 +502,7 @@
       )
       return unregisterDestroyableAndCallItsDestroy
     }
-    fetch(url2, fetchOptions) {
+    fetch(url, fetchOptions) {
       const { timeoutMs, map: map2, assertOk = true, ...fetchInit } = fetchOptions != null ? fetchOptions : {}
       const createAbortController = (destroy) => {
         const abortController2 = new AbortController()
@@ -517,7 +517,7 @@
       const [abortController, destroyAbortController] = isDefined(timeoutMs)
         ? createAbortController(() => unregisterDestroyableAndCallItsDestroy())
         : []
-      const response = fetch(url2, {
+      const response = fetch(url, {
         ...fetchInit,
         signal: abortController == null ? void 0 : abortController.signal,
       })
@@ -531,7 +531,7 @@
           })
         : response
       const unregisterDestroyableAndCallItsDestroy = this.registeredSources.add(
-        new FetchDestroyable(url2, timeoutMs, maybeOkResponse, () => {
+        new FetchDestroyable(url, timeoutMs, maybeOkResponse, () => {
           unregisterDestroyableAndCallItsDestroy()
           destroyAbortController == null ? void 0 : destroyAbortController()
         })
@@ -571,14 +571,18 @@
     }
     update(update) {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
-      if (typeof this.value !== 'object') {
-      }
+      if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
       const finalUpdate = typeof update === 'function' ? update(this.value) : update
       this.set({ ...this.value, ...finalUpdate })
     }
     onValueChange(cb) {
       if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
-      return this.getOnChange().subscribe(cb)
+      const unsub = this.getOnChange().subscribe(cb)
+      cb(this.value, this.value)
+      return unsub
+    }
+    republish() {
+      this.getOnChange().publish(this.value, this.value)
     }
     destroy() {
       var _a2
@@ -589,13 +593,13 @@
   var FormState = class extends State {
     constructor(parent, t, initValuesOrLinkedState, options) {
       const { validate, ...stateOptions } = options || {}
-      const inputs = collectFormsInputs(t)
+      const inputs2 = collectFormsInputs(t)
       if (initValuesOrLinkedState instanceof State) {
         const initState = initValuesOrLinkedState.get()
         const init = {}
-        inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)))
+        inputs2.forEach(([path]) => setByPath(init, path, getByPath(initState, path)))
         super(parent, init, stateOptions)
-        this.configureInputs(this, inputs)
+        this.configureInputs(this, inputs2)
         this.onValueChange((newState) => {
           if (validate && !validate(newState)) {
             return
@@ -612,14 +616,14 @@
             }
             this.set(newState)
           })
-          this.configureInputs(validInputValuesState, inputs)
+          this.configureInputs(validInputValuesState, inputs2)
         } else {
-          this.configureInputs(this, inputs)
+          this.configureInputs(this, inputs2)
         }
       }
     }
-    configureInputs(inputState, inputs) {
-      for (const [path, input2] of inputs) {
+    configureInputs(inputState, inputs2) {
+      for (const [path, input2] of inputs2) {
         const state = inputState.get()
         const value = getByPath(state, path)
         if (input2.node instanceof HTMLInputElement) {
@@ -657,16 +661,18 @@
   var createForm = defaultContext.createForm.bind(defaultContext)
 
   // src/domBuilderEvents.ts
-  var Events = class {
+  var EventHandlerObject = class {
     constructor(events2) {
       this.events = events2
     }
   }
   function events(events2) {
-    return new Events(events2 instanceof Events || 'events' in events2 ? events2.events : events2)
+    return new EventHandlerObject(
+      events2 instanceof EventHandlerObject || 'events' in events2 ? events2.events : events2
+    )
   }
   function setEvents(node, arg) {
-    const ev = arg instanceof Events ? arg : events(arg)
+    const ev = arg instanceof EventHandlerObject ? arg : events(arg)
     Object.entries(ev.events).forEach(([key, fn]) => {
       node.addEventListener(key, (event) => {
         fn == null ? void 0 : fn({ node, event })
@@ -677,27 +683,27 @@
   // src/domBuilderStyles.ts
   function setClass(element, argValue) {
     const classList = element.classList
-    const visit = (argValue2) => {
+    const visit2 = (argValue2) => {
       if (Array.isArray(argValue2)) {
-        argValue2.forEach((arg) => visit(arg))
+        argValue2.forEach((arg) => visit2(arg))
       } else {
         classList.add(...argValue2.split(' '))
       }
     }
-    visit(argValue)
+    visit2(argValue)
   }
-  function styles(...inputs) {
+  function styles(...inputs2) {
     const flat = {}
-    for (const input2 of Array.from(inputs).flat()) {
-      if (input2 instanceof Styles) {
+    for (const input2 of Array.from(inputs2).flat()) {
+      if (input2 instanceof StylesObject) {
         Object.assign(flat, input2.styles)
       } else {
         Object.assign(flat, input2)
       }
     }
-    return new Styles(flat)
+    return new StylesObject(flat)
   }
-  var Styles = class {
+  var StylesObject = class {
     constructor(styles2) {
       this.styles = styles2
     }
@@ -759,8 +765,8 @@
     const parts = flat.map((p2) => convertPrimitiveValue(prop, p2))
     return parts.join(', ')
   }
-  function setStyle(el, ...inputs) {
-    for (const style2 of inputs) {
+  function setStyle(el, ...inputs2) {
+    for (const style2 of inputs2) {
       for (const key in style2) {
         if (!Object.prototype.hasOwnProperty.call(style2, key)) continue
         const raw = style2[key]
@@ -790,28 +796,26 @@
   // src/types.ts
   var WrappedNode = class {
     constructor(node) {
-      this._node = node
-    }
-    get node() {
-      return this._node
+      this.node = node
     }
   }
 
   // src/domBuilder.ts
-  function addItems(element, ...args) {
+  function visit(element, fragment, ...args) {
     args.forEach((arg) => {
-      if (Array.isArray(arg)) {
-        addItems(element, ...arg)
-      } else if (isNode(arg)) {
-        element.appendChild(arg)
+      if (arg === false || arg === void 0) {
+      } else if (Array.isArray(arg)) {
+        visit(element, fragment, ...arg)
+      } else if (isAppendableNode(arg)) {
+        fragment.appendChild(arg)
       } else if (arg instanceof WrappedNode) {
-        element.appendChild(arg.node)
-      } else if (arg instanceof Styles) {
+        fragment.appendChild(arg.node)
+      } else if (arg instanceof StylesObject) {
         setStyle(element, arg.styles)
-      } else if (arg instanceof Events) {
+      } else if (arg instanceof EventHandlerObject) {
         setEvents(element, arg)
-      } else if (typeof arg === 'string') {
-        element.appendChild(getDocument().createTextNode(arg))
+      } else if (typeof arg === 'string' || typeof arg === 'number') {
+        fragment.appendChild(getDocument().createTextNode(String(arg)))
       } else if (typeof arg === 'object') {
         Object.entries(arg).forEach(([key, argValue]) => {
           if (key === 'class') {
@@ -830,8 +834,21 @@
       }
     })
   }
+  function appendOrReplace(replace, elementOrWrapped, ...args) {
+    const element = elementOrWrapped instanceof WrappedNode ? elementOrWrapped.node : elementOrWrapped
+    const fragment = getDocument().createDocumentFragment()
+    visit(element, fragment, ...args)
+    if (replace) {
+      element.replaceChildren(fragment)
+    } else {
+      element.appendChild(fragment)
+    }
+  }
+  function appendChildren(element, ...args) {
+    appendOrReplace(false, element, ...args)
+  }
   var doc = typeof document !== 'undefined' ? document : void 0
-  var isNode = (e) => {
+  var isAppendableNode = (e) => {
     return typeof document !== 'undefined' && !![HTMLElement, Text].find((value) => e instanceof value)
   }
   function getDocument() {
@@ -842,7 +859,7 @@
   }
   function createElement(tagName, ...args) {
     const element = getDocument().createElement(tagName)
-    addItems(element, ...args)
+    appendChildren(element, ...args)
     return element
   }
   var createElementFn =
@@ -966,27 +983,29 @@
     (type) =>
     (...args) =>
       createElement('input', { type }, ...args)
-  var inputButton = createInputFn('button')
-  var checkbox = createInputFn('checkbox')
-  var color = createInputFn('color')
-  var date = createInputFn('date')
-  var datetimeLocal = createInputFn('datetime-local')
-  var email = createInputFn('email')
-  var hidden = createInputFn('hidden')
-  var image = createInputFn('image')
-  var month = createInputFn('month')
-  var number = createInputFn('number')
-  var password = createInputFn('password')
-  var radio = createInputFn('radio')
-  var range = createInputFn('range')
-  var reset = createInputFn('reset')
-  var inputSearch = createInputFn('search')
-  var submit = createInputFn('submit')
-  var tel = createInputFn('tel')
-  var inputText = createInputFn('text')
-  var inputTime = createInputFn('time')
-  var url = createInputFn('url')
-  var week = createInputFn('week')
+  var inputs = {
+    button: createInputFn('button'),
+    checkbox: createInputFn('checkbox'),
+    color: createInputFn('color'),
+    date: createInputFn('date'),
+    datetimeLocal: createInputFn('datetime-local'),
+    email: createInputFn('email'),
+    hidden: createInputFn('hidden'),
+    image: createInputFn('image'),
+    month: createInputFn('month'),
+    number: createInputFn('number'),
+    password: createInputFn('password'),
+    radio: createInputFn('radio'),
+    range: createInputFn('range'),
+    reset: createInputFn('reset'),
+    search: createInputFn('search'),
+    submit: createInputFn('submit'),
+    tel: createInputFn('tel'),
+    text: createInputFn('text'),
+    time: createInputFn('time'),
+    url: createInputFn('url'),
+    week: createInputFn('week'),
+  }
   function setElementToId(targetId, element) {
     const targetElement = getDocument().getElementById(targetId)
     if (targetElement) {
@@ -1021,7 +1040,7 @@
     }
     function counter(state = createState({ total: 0 })) {
       const root = createNodes(state)
-      const reset2 = button(
+      const reset = button(
         'Reset',
         events({
           click() {
@@ -1030,7 +1049,7 @@
         })
       )
       state.updateUi()
-      return div(root, reset2)
+      return div(root, reset)
     }
     return counter()
   }
@@ -1044,7 +1063,6 @@
   function fetchDemo() {
     const info = text('Not loaded')
     const b2 = button('Click me to fetch!')
-    let counter = 0
     const setText = (s2) => (info.nodeValue = s2)
     const handleError = (reason) =>
       setText(
@@ -1054,7 +1072,6 @@
       )
     const state = createController()
     state.addDomEvent('start fetch', b2, 'click', () => {
-      counter++
       setText('Loading...')
       state.fetch('test.json', { timeoutMs: 1e3 }).then(() => setText(`Loaded ok.`), handleError)
     })
