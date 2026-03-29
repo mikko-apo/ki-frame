@@ -1,40 +1,43 @@
 import type { HTMLInputTypeAttribute } from 'react'
-import { Events, type EventsInput, setEvents } from './domBuilderEvents'
-import { type StyleObject, Styles, setClass, setStyle } from './domBuilderStyles'
+import { EventHandlerObject, type EventsInput, setEvents } from './domBuilderEvents'
+import { setClass, setStyle, type StyleObject, StylesObject } from './domBuilderStyles'
 import { WrappedNode } from './types'
 
-type CreateElementTypes<K extends keyof HTMLElementTagNameMap> =
-  | HTMLElement
-  | Text
-  | string
-  | WrappedNode
-  | Styles
-  | Events<K>
-type ExtendedCreateElementAttributes<K extends keyof HTMLElementTagNameMap> = {
-  class: string | string[]
-  styles: StyleObject
-  events: EventsInput<K>
-}
+type AppendChildrenType = false | undefined | Node | Text | string | number | WrappedNode<Node>
 type CreateElementArg<K extends keyof HTMLElementTagNameMap> =
-  | CreateElementTypes<K>
-  | CreateElementTypes<K>[]
-  | Partial<HTMLElementTagNameMap[K] & ExtendedCreateElementAttributes<K>>
+  | AppendChildrenType
+  | WrappedNode<HTMLElementTagNameMap[K]>
+  | StylesObject
+  | EventHandlerObject<K>
+  | {
+      class?: string | string[]
+      styles?: StyleObject
+      events?: EventsInput<K>
+    }
+  | Partial<HTMLElementTagNameMap[K]>
+  | CreateElementArg<K>[]
 export type CreateElementArgs<K extends keyof HTMLElementTagNameMap> = CreateElementArg<K>[]
 
-function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, ...args: CreateElementArgs<K>) {
+function visit<K extends keyof HTMLElementTagNameMap>(
+  element: HTMLElement,
+  fragment: DocumentFragment,
+  ...args: CreateElementArgs<K>
+) {
   args.forEach((arg) => {
-    if (Array.isArray(arg)) {
-      addItems(element, ...arg)
-    } else if (isNode(arg)) {
-      element.appendChild(arg)
+    if (arg === false || arg === undefined) {
+      // ok it ignore
+    } else if (Array.isArray(arg)) {
+      visit(element, fragment, ...arg)
+    } else if (isAppendableNode(arg)) {
+      fragment.appendChild(arg)
     } else if (arg instanceof WrappedNode) {
-      element.appendChild(arg.node)
-    } else if (arg instanceof Styles) {
+      fragment.appendChild(arg.node)
+    } else if (arg instanceof StylesObject) {
       setStyle(element, arg.styles)
-    } else if (arg instanceof Events) {
+    } else if (arg instanceof EventHandlerObject) {
       setEvents(element, arg as any)
-    } else if (typeof arg === 'string') {
-      element.appendChild(getDocument().createTextNode(arg))
+    } else if (typeof arg === 'string' || typeof arg === 'number') {
+      fragment.appendChild(getDocument().createTextNode(String(arg)))
     } else if (typeof arg === 'object') {
       Object.entries(arg).forEach(([key, argValue]) => {
         if (key === 'class') {
@@ -54,14 +57,43 @@ function addItems<K extends keyof HTMLElementTagNameMap>(element: HTMLElement, .
   })
 }
 
+function appendOrReplace<K extends keyof HTMLElementTagNameMap>(
+  replace: boolean,
+  elementOrWrapped: HTMLElement | WrappedNode<HTMLElementTagNameMap[K]>,
+  ...args: CreateElementArgs<K>
+) {
+  const element = elementOrWrapped instanceof WrappedNode ? elementOrWrapped.node : elementOrWrapped
+  const fragment = getDocument().createDocumentFragment()
+  visit(element, fragment, ...args)
+  if (replace) {
+    element.replaceChildren(fragment)
+  } else {
+    element.appendChild(fragment)
+  }
+}
+
+export function appendChildren<K extends keyof HTMLElementTagNameMap>(
+  element: HTMLElement | WrappedNode<HTMLElementTagNameMap[K]>,
+  ...args: CreateElementArgs<K>
+) {
+  appendOrReplace(false, element, ...args)
+}
+
+export function replaceChildren<K extends keyof HTMLElementTagNameMap>(
+  element: HTMLElement | WrappedNode<HTMLElementTagNameMap[K]>,
+  ...args: CreateElementArgs<K>
+) {
+  appendOrReplace(true, element, ...args)
+}
+
 let doc: Document | undefined = typeof document !== 'undefined' ? document : undefined
-let isNode = (e: unknown): e is Node => {
+let isAppendableNode = (e: unknown): e is Node => {
   return typeof document !== 'undefined' && !![HTMLElement, Text].find((value) => e instanceof value)
 }
 
-export function setCreateElementContext(newDoc: Document, newIsNode: typeof isNode) {
+export function setCreateElementContext(newDoc: Document, newIsNode: typeof isAppendableNode) {
   doc = newDoc
-  isNode = newIsNode
+  isAppendableNode = newIsNode
 }
 
 function getDocument() {
@@ -76,7 +108,7 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   ...args: CreateElementArgs<K>
 ): HTMLElementTagNameMap[K] {
   const element = getDocument().createElement(tagName)
-  addItems(element, ...args)
+  appendChildren(element, ...args)
   return element as HTMLElementTagNameMap[K]
 }
 
@@ -208,27 +240,30 @@ const createInputFn =
   (type: HTMLInputTypeAttribute) =>
   (...args: CreateElementArgs<'input'>) =>
     createElement('input', { type }, ...args)
-export const inputButton = createInputFn('button')
-export const checkbox = createInputFn('checkbox')
-export const color = createInputFn('color')
-export const date = createInputFn('date')
-export const datetimeLocal = createInputFn('datetime-local')
-export const email = createInputFn('email')
-export const hidden = createInputFn('hidden')
-export const image = createInputFn('image')
-export const month = createInputFn('month')
-export const number = createInputFn('number')
-export const password = createInputFn('password')
-export const radio = createInputFn('radio')
-export const range = createInputFn('range')
-export const reset = createInputFn('reset')
-export const inputSearch = createInputFn('search')
-export const submit = createInputFn('submit')
-export const tel = createInputFn('tel')
-export const inputText = createInputFn('text')
-export const inputTime = createInputFn('time')
-export const url = createInputFn('url')
-export const week = createInputFn('week')
+
+export const inputs = {
+  button: createInputFn('button'),
+  checkbox: createInputFn('checkbox'),
+  color: createInputFn('color'),
+  date: createInputFn('date'),
+  datetimeLocal: createInputFn('datetime-local'),
+  email: createInputFn('email'),
+  hidden: createInputFn('hidden'),
+  image: createInputFn('image'),
+  month: createInputFn('month'),
+  number: createInputFn('number'),
+  password: createInputFn('password'),
+  radio: createInputFn('radio'),
+  range: createInputFn('range'),
+  reset: createInputFn('reset'),
+  search: createInputFn('search'),
+  submit: createInputFn('submit'),
+  tel: createInputFn('tel'),
+  text: createInputFn('text'),
+  time: createInputFn('time'),
+  url: createInputFn('url'),
+  week: createInputFn('week'),
+}
 
 // Render function that appends generated elements to the target element
 export function setElementToId(targetId: string, element: HTMLElement) {
