@@ -328,7 +328,9 @@ export class State<Value> extends Controller {
 
   onValueChange(cb: (obj: Value, old: Value) => void): Unsub {
     if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
-    return this.getOnChange().subscribe(cb)
+    const unsub = this.getOnChange().subscribe(cb)
+    cb(this.value, this.value)
+    return unsub
   }
 
   override destroy() {
