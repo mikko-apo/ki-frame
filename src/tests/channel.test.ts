@@ -35,7 +35,7 @@ describe(Channel, () => {
   it('.once()', () => {
     const channel = new Channel<[number]>('test')
     let c = 0
-    const subFn = channel.once((args) => {
+    channel.once((args) => {
       c = args
     })
     channel.publish(2)

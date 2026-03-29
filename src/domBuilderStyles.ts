@@ -21,22 +21,22 @@ export function setClass(element: HTMLElement, argValue: CssClass) {
  */
 type StyleValue = string | number | Array<string | number>
 //export type StyleObject = CSS.Properties<string | number | Array<string | number>>;
-export type StyleObject = (CSSType.Properties | Styles) | StyleObject[]
+export type StyleObject = (CSSType.Properties | StylesObject) | StyleObject[]
 
-export function styles(...inputs: StyleObject[]): Styles {
+export function styles(...inputs: StyleObject[]): StylesObject {
   const flat: CSSType.Properties = {}
 
   for (const input of Array.from(inputs).flat()) {
-    if (input instanceof Styles) {
+    if (input instanceof StylesObject) {
       Object.assign(flat, input.styles)
     } else {
       Object.assign(flat, input)
     }
   }
-  return new Styles(flat)
+  return new StylesObject(flat)
 }
 
-export class Styles {
+export class StylesObject {
   constructor(public readonly styles: CSSType.Properties) {}
 }
 /**

@@ -8,7 +8,7 @@ describe(createState, () => {
     const state = createState({ c: 0 }, { name: 'test' })
     expect(state.get()).toEqual({ c: 0 })
     let c = 0
-    state.onValueChange((obj, old) => {
+    state.onValueChange((obj) => {
       c = obj.c
     })
     state.set({ c: 1 })
@@ -30,7 +30,7 @@ describe('state', () => {
     setJsdomApp()
     const node = p()
     const state = createState({ c: 0 }, { name: 'test' })
-    state.addDomEvent('counter', node, 'click', (ev) => {
+    state.addDomEvent('counter', node, 'click', () => {
       state.set((cur) => ({ c: cur.c + 2 }))
     })
     node.click()
