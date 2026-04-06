@@ -424,6 +424,7 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 **Planned**
 
 - state
+  - State.merge(sources, config: {})
   - logging of relevant things via context
   - unified model for sharing data, event signalling
     - to linked/child states

@@ -27,7 +27,7 @@ export function domBuilderWithState() {
     return root
   }
 
-  function counter(state = createState({ total: 0 })) {
+  function counter(state = createState({ value: { total: 0 } })) {
     const root = createNodes(state)
     // unmanaged click listener, will be removed when <div> returned counter() is removed from DOM tree
     const reset = button(
