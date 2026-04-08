@@ -361,8 +361,8 @@
       this.controllers.add(controller)
       return controller
     }
-    createState(initialValue) {
-      const state = State.create(initialValue)
+    createState(params) {
+      const state = new State(params)
       state.parent = this
       this.controllers.add(state)
       return state
@@ -551,14 +551,13 @@
     }
   }
   var _State = class _State extends Controller {
-    constructor(value) {
+    constructor(params) {
+      var _a2
       super()
-      this.value = value
-    }
-    static create(initialValue) {
-      const state = new _State(initialValue)
-      state.options.name = 'state'
-      return state
+      this.options.name = (_a2 = params == null ? void 0 : params.name) != null ? _a2 : 'state'
+      this.value = params == null ? void 0 : params.value
+      this.parent = params == null ? void 0 : params.parent
+      this.mapFn = params == null ? void 0 : params.reducer
     }
     get() {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot get value'))
@@ -574,14 +573,19 @@
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot set() value'))
       const old = this.value
       const finalObj = typeof newObj === 'function' ? newObj(this.value) : newObj
-      if (finalObj === _State.Never || shallowEqual(old, finalObj)) return
-      this.value = finalObj
-      this.getOnChange().publish(finalObj, old ? old : finalObj)
+      if (finalObj === _State.Never) return
+      const value = this.mapFn ? this.mapFn(finalObj, this.value) : finalObj
+      if (value !== _State.Never && !shallowEqual(old, finalObj)) {
+        this.value = value
+        this.getOnChange().publish(this.value, old ? old : finalObj)
+      }
     }
     update(update) {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
-      if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
       if (this.value === void 0) throw new Error(this.idTxt('State is undefined. Can not update() value'))
+      if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
+      if (this.mapFn !== void 0)
+        throw new Error(this.idTxt("State({reducer:fn()}) function is defined. Don't call state.update()"))
       const finalUpdate = typeof update === 'function' ? update(this.value) : update
       if (finalUpdate === _State.Never) return
       this.set({ ...this.value, ...finalUpdate })
@@ -599,10 +603,10 @@
       super.destroy()
       ;(_a2 = this.onChange) == null ? void 0 : _a2.destroy()
     }
-    map(cb) {
-      const state = _State.create()
-      this.onValueChange((obj, old) => {
-        state.set((cur) => cb(obj, old, cur))
+    map(map2, params = {}) {
+      const state = new _State({ ...params, reducer: map2 })
+      this.onValueChange((obj) => {
+        state.set(obj)
       })
       return state
     }
@@ -628,7 +632,7 @@
       } else {
         super(initValuesOrLinkedState)
         if (validate) {
-          const validInputValuesState = this.createState(initValuesOrLinkedState)
+          const validInputValuesState = this.createState({ value: initValuesOrLinkedState })
           validInputValuesState.options.name = 'valid input values'
           validInputValuesState.onValueChange((newState) => {
             if (!validate(newState)) {
@@ -1058,7 +1062,7 @@
       })
       return root
     }
-    function counter(state = createState({ total: 0 })) {
+    function counter(state = createState({ value: { total: 0 } })) {
       const root = createNodes(state)
       const reset = button(
         'Reset',
@@ -1148,7 +1152,7 @@
 
   // src/demos/channelsDemo.ts
   function channelsDemo() {
-    const state = createState({ total: 0 })
+    const state = createState({ value: { total: 0 } })
     const channels = new ChannelRegistry()
     const channel = channels.get('test')
     let num = 0
@@ -1172,7 +1176,7 @@
 
   // src/demos/simpleDemos.ts
   function basicCounter() {
-    const state = createState({ total: 0 })
+    const state = createState({ value: { total: 0 } })
     function infoText(state2) {
       const t = text()
       state2.onValueChange((obj) => (t.nodeValue = `${obj.total}`))
@@ -1195,7 +1199,7 @@
         }
         state.set((cur) => ({ ...cur, [key]: node.value }))
       })
-    function simpleForm2(formData = createState({ a: '23', b: '234' })) {
+    function simpleForm2(formData = createState({ value: { a: '23', b: '234' } })) {
       const i1 = input()
       const i2 = input()
       const info = pre()
@@ -1232,7 +1236,7 @@
 
   // src/demos/stateOnDestroyDemo.ts
   function onDestroyTwoNodes() {
-    const state = createState({ total: 123 })
+    const state = createState({ value: { total: 123 } })
     const info = (txt, s2) => {
       const t = text()
       s2.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`))
@@ -1246,8 +1250,8 @@
     return root
   }
   function onDestroyParentDemo() {
-    const parent = createState({})
-    const state = createState({ total: 0 })
+    const parent = createState({ value: {} })
+    const state = createState({ value: { total: 0 } })
     state.onDestroy(() => {
       root.replaceChildren(stateInfo, parentInfo)
       stateInfo.nodeValue = 'State destroyed!'

@@ -3,7 +3,7 @@ import { ChannelRegistry } from '../channel'
 import { p, text } from '../domBuilder'
 
 export function channelsDemo() {
-  const state = createState({ total: 0 })
+  const state = createState({ value: { total: 0 } })
   const channels = new ChannelRegistry<{ test: { num: number } }>()
   const channel = channels.get('test')
   let num = 0

@@ -10,7 +10,7 @@ const createNodes = () => {
   return { info, root }
 }
 
-function counter(state = createState({ total: 0 })) {
+function counter(state = createState({ value: { total: 0 } })) {
   const nodes = createNodes()
   // connect subscribers
   nodes.root.onclick = () => state.set((cur) => ({ total: cur.total + 1 }))
@@ -23,7 +23,7 @@ function counter(state = createState({ total: 0 })) {
 describe('Example tests', () => {
   it('connected counter() and root.click()', () => {
     setJsdomApp()
-    const { root, info } = counter(createState({ total: 0 }))
+    const { root, info } = counter(createState({ value: { total: 0 } }))
     expect(root).toMatchSnapshot()
     expect(info.nodeValue).toEqual('Counter: 0')
     root.click()
