@@ -20,7 +20,7 @@ export function simpleForm() {
     })
 
   // since there is no form api, here's an example on how to do that with the basic ki-frame api
-  function simpleForm(formData = createState({ a: '23', b: '234' })) {
+  function simpleForm(formData = createState({ value: { a: '23', b: '234' } })) {
     // define dom elements
     const i1 = input()
     const i2 = input()

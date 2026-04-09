@@ -139,7 +139,7 @@ This allows the code to decide if the dependency should keep objects alive
 |                                                      |                                                                                                                                           |                                                                                                                    |     |     |
 
 ```typescript
-function counter(state = createState({ total: 0 }, { weakRef: true })) {
+function counter(state = createState({ value: { total: 0 } }, { weakRef: true })) {
   const nodes = createNodes()
   // connect subscribers
   state.withStrongRefs((strongRefState) => {
@@ -281,7 +281,7 @@ flowchart TD
 
 ```typescript
 function onDestroyDemo() {
-  const state = createState({ total: 123 })
+  const state = createState({ value: { total: 123 } })
   const info = (txt: string, s: State<Total>) => {
     const t = text()
     state.onChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`))

@@ -6,7 +6,7 @@ interface Total {
 }
 
 export function onDestroyTwoNodes() {
-  const state = createState({ total: 123 })
+  const state = createState({ value: { total: 123 } })
   const info = (txt: string, s: State<Total>) => {
     const t = text()
     s.onValueChange((obj) => (t.nodeValue = `${txt}: ${obj.total}`))
@@ -21,8 +21,8 @@ export function onDestroyTwoNodes() {
 }
 
 export function onDestroyParentDemo() {
-  const parent = createState({})
-  const state = createState({ total: 0 })
+  const parent = createState({ value: {} })
+  const state = createState({ value: { total: 0 } })
   state.onDestroy(() => {
     root.replaceChildren(stateInfo, parentInfo)
     stateInfo.nodeValue = 'State destroyed!'

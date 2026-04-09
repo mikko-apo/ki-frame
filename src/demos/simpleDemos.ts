@@ -7,7 +7,7 @@ interface Total {
 }
 
 export function basicCounter() {
-  const state = createState({ total: 0 })
+  const state = createState({ value: { total: 0 } })
 
   function infoText(state: State<Total>) {
     const t = text()

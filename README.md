@@ -171,7 +171,7 @@ More information:
 ```typescript
 import { a, p, setElementToId } from './domBuilder'
 
-const state = createState({ total: 0 })
+const state = createState({ value: { total: 0 } })
 const root = p('Click this text to update counter', {
   styles: {
     color: 'red',
@@ -196,7 +196,7 @@ Checkout
 
 ## Use createState()
 
-If you need state, use `createState({...})` to create a typed state object. It's ok to share the state object
+If you need state, use `createState({ value: {...} })` to create a typed state object. It's ok to share the state object
 reference inside the application to other functions and DOM nodes. Use `state.onChange()` to react to changes in state.
 
 State supports following functions for setting and notifying of state change:
@@ -218,7 +218,7 @@ const createNodes = () => {
   return { info, root }
 }
 
-function counter(state = createState({ total: 0 })) {
+function counter(state = createState({ value: { total: 0 } })) {
   const nodes = createNodes()
   nodes.root.onclick = () => state.set((cur) => ({ total: cur.total + 1 }))
   state.onValueChange((obj) => (nodes.info.nodeValue = `Counter: ${obj.total}`))
@@ -300,7 +300,7 @@ const createNodes = () => {
   return { info, root }
 }
 
-function counter(state = createState({ total: 0 })) {
+function counter(state = createState({ value: { total: 0 } })) {
   const nodes = createNodes()
   // connect subscribers
   state.addDomEvent('counter', nodes.root, 'click', () => state.set((cur) => ({ total: cur.total + 1 })))
@@ -371,7 +371,7 @@ HTML. .click() and its subscribers are processed synchronously in the background
 describe('Example tests', () => {
   it('connected counter() and root.click()', () => {
     setJsdomApp()
-    const { root, info } = counter(createState({ total: 0 }))
+    const { root, info } = counter(createState({ value: { total: 0 } }))
     expect(root).toMatchSnapshot()
     expect(info.nodeValue).toEqual('Counter: 0')
     root.click()
@@ -424,6 +424,7 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 **Planned**
 
 - state
+  - State.merge(sources, config: {})
   - logging of relevant things via context
   - unified model for sharing data, event signalling
     - to linked/child states
@@ -527,7 +528,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
     - maybe onChange should include onDestory subscription too
     - Create a diagram to explain how to changes and destroys work together
   - state operations
-    - state.reducer()
     - state.pick()
     - state.merge()
   - generic promise support

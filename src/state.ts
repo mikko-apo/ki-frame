@@ -10,7 +10,7 @@ import {
 } from './promiseDestroy'
 import type { DestroyCb, EventSource } from './types'
 import { getByPath } from './util/getByPath'
-import { createId } from './util/objectIdCounter'
+import { getId } from './util/objectIdCounter'
 import { copyAndSet, setByPath } from './util/setByPath'
 import { DestroyableSet } from './util/strongOrWeakSet'
 import { isDefined } from './util/typeUtils'
@@ -44,31 +44,37 @@ interface LinkedController extends LinkControllerOptions {
 }
 
 export class Context implements Destroyable {
-  constructor(
-    public readonly parent?: Context,
-    public readonly controllers = new DestroyableSet<Context>('weak')
-  ) {}
+  public parent?: Context
+  constructor(public readonly controllers = new DestroyableSet<Context>('weak')) {}
 
-  createController(options?: StateOptions) {
-    const controller = new Controller(this, options)
+  createController() {
+    const controller = new Controller()
+    controller.parent = this
     this.controllers.add(controller)
     return controller
   }
-
-  createState<Value>(initialValue: Value, options?: StateOptions): State<Value> {
-    const state = new State(this, initialValue, options)
+  createState<ValueOrInput, Value>(params: {
+    value: Value
+    reducer: (source: ValueOrInput, cur: Value) => Value | typeof State.Never
+  }): State<ValueOrInput, Value>
+  createState<Value>(params?: StateParams<Value, Value>): State<Value>
+  createState<Value>(): State<Value, Value | undefined>
+  createState<ValueOrInput, Value>(params?: StateParams<ValueOrInput, Value>): State<ValueOrInput, Value> {
+    const state = new State(params)
+    state.parent = this
     this.controllers.add(state)
     return state
   }
 
   createForm<T extends Record<string, any>, Linked extends StateFromInputTree<T> = StateFromInputTree<T>>(
     t: T,
-    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
+    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked, Linked>,
     options?: {
       validate?: (value: StateFromInputTree<T>) => boolean
-    } & StateOptions
+    }
   ): FormState<T> {
-    const form = new FormState(this, t, initValuesOrLinkedState, options)
+    const form = new FormState(t, initValuesOrLinkedState, options)
+    form.parent = this
     this.controllers.add(form)
     return form
   }
@@ -80,20 +86,17 @@ export class Context implements Destroyable {
 }
 
 export class Controller extends Context {
-  private options: Required<StateOptions>
+  public options: Required<StateOptions> = { name: 'controller', weakRef: false }
   private _destroyed = false
-  private readonly _stateId: string
   private outputChannel?: Channel<ControllerDefaultEventShapes>
   private registeredSources = new DestroyableSet<TimeoutDestroyable | FetchDestroyable<any>>()
   private onDestroyListeners = new DestroyableSet<Destroyable>()
   private linkedStates = new Set<LinkedController>()
   private eventSources: EventSource<any>[] = []
+  private id = getId()
 
-  constructor(parent: Context, options?: StateOptions) {
-    super(parent, new DestroyableSet<Context>())
-    const { name = 'state', weakRef = false } = options ?? {}
-    this.options = { name, weakRef }
-    this._stateId = createId(name)
+  constructor() {
+    super()
   }
 
   private getOutputChannel() {
@@ -104,7 +107,7 @@ export class Controller extends Context {
   }
 
   get stateId() {
-    return this._stateId
+    return `${this.options.name}-${this.id}`
   }
 
   get destroyed(): boolean {
@@ -287,19 +290,39 @@ export class Controller extends Context {
     return new PromiseDestroy(maybeOkResponse, unregisterDestroyableAndCallItsDestroy)
   }
 }
+type StateReducer<Input, Value> = (obj: Input, cur: Value) => Value | typeof State.Never
 
-export class State<Value> extends Controller {
-  public value: Value
+export interface StateParams<ValueOrInput, Value = ValueOrInput> {
+  value?: Value
+  reducer?: StateReducer<ValueOrInput, Value>
+  name?: string
+  parent?: Context
+  debounce?: boolean
+}
+
+export type OnValueChangeParams = { noInit?: boolean }
+
+export interface StateListener<Value> {
+  onValueChange(cb: (obj: Value, old?: Value) => void, params?: OnValueChangeParams): Unsub
+}
+
+export class State<ValueOrInput, Value = ValueOrInput> extends Controller implements StateListener<Value> {
+  public static readonly Never = Symbol('WritableState.Never')
+  private value?: Value
+  private mapFn?: (source: ValueOrInput, cur: Value) => Value | typeof State.Never
   private onChange?: Channel<[Readonly<Value>, Readonly<Value>]>
 
-  constructor(parent: Context, initialValue: Value, options?: StateOptions) {
-    super(parent, options)
-    this.value = initialValue
+  constructor(params?: StateParams<ValueOrInput, Value>) {
+    super()
+    this.options.name = params?.name ?? 'state'
+    this.value = params?.value
+    this.parent = params?.parent
+    this.mapFn = params?.reducer
   }
 
-  get() {
+  get(): Value {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot get value'))
-    return this.value
+    return this.value as Value
   }
 
   private getOnChange() {
@@ -309,27 +332,41 @@ export class State<Value> extends Controller {
     return this.onChange
   }
 
-  set(newObj: Value | ((cur: Value) => Value)) {
+  set(newObj: ValueOrInput | typeof State.Never | ((cur: Value) => ValueOrInput | typeof State.Never)) {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot set() value'))
     const old = this.value
-    const finalObj: Value = typeof newObj === 'function' ? (newObj as (cur: Value) => Value)(this.value) : newObj
-    if (shallowEqual(old, finalObj)) return
-    this.value = finalObj
-    this.getOnChange().publish(finalObj, old)
+    const finalObj: Value | ValueOrInput | typeof State.Never =
+      typeof newObj === 'function'
+        ? (newObj as (cur: Value) => ValueOrInput | typeof State.Never)(this.value as Value)
+        : newObj
+    if (finalObj === State.Never) return
+    const value = this.mapFn ? this.mapFn(finalObj as ValueOrInput, this.value as Value) : finalObj
+    if (value !== State.Never && !shallowEqual(old, finalObj)) {
+      this.value = value as Value
+      this.getOnChange().publish(this.value, old ? old : (finalObj as any as Value))
+    }
   }
 
-  update(update: Value | Partial<Value> | ((cur: Value) => Value | Partial<Value>)) {
+  update(
+    update: Value | typeof State.Never | Partial<Value> | ((cur: Value) => Value | Partial<Value> | typeof State.Never)
+  ) {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
+    if (this.value === undefined) throw new Error(this.idTxt('State is undefined. Can not update() value'))
     if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
+    if (this.mapFn !== undefined)
+      throw new Error(this.idTxt("State({reducer:fn()}) function is defined. Don't call state.update()"))
     const finalUpdate =
       typeof update === 'function' ? (update as (cur: Value) => Value | Partial<Value>)(this.value) : update
-    this.set({ ...this.value, ...finalUpdate })
+    if (finalUpdate === State.Never) return
+    this.set({ ...(this.value as ValueOrInput), ...finalUpdate })
   }
 
-  onValueChange(cb: (obj: Value, old: Value) => void): Unsub {
+  onValueChange(cb: (obj: Value, old?: Value) => void, params?: OnValueChangeParams): Unsub {
     if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
     const unsub = this.getOnChange().subscribe(cb)
-    cb(this.value, this.value)
+    if (isDefined(this.value) && !params?.noInit) {
+      cb(this.value as any as Value, this.value)
+    }
     return unsub
   }
 
@@ -337,27 +374,37 @@ export class State<Value> extends Controller {
     super.destroy()
     this.onChange?.destroy()
   }
+
+  map<NewValue>(
+    map: StateReducer<Value, NewValue>,
+    params: Omit<StateParams<Value, NewValue>, 'reducer'> = {}
+  ): State<Value, NewValue> {
+    const state = new State({ ...params, reducer: map })
+    this.onValueChange((obj) => {
+      state.set(obj)
+    })
+    return state
+  }
 }
 
 export class FormState<
   T extends Record<string, any>,
   Linked extends StateFromInputTree<T> = StateFromInputTree<T>,
-> extends State<StateFromInputTree<T>> {
+> extends State<StateFromInputTree<T>, StateFromInputTree<T>> {
   constructor(
-    parent: Context,
     t: T,
-    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked>,
+    initValuesOrLinkedState: StateFromInputTree<T> | State<Linked, Linked>,
     options?: {
       validate?: (value: StateFromInputTree<T>) => boolean
-    } & StateOptions
+    }
   ) {
-    const { validate, ...stateOptions } = options || {}
+    const { validate } = options || {}
     const inputs = collectFormsInputs(t)
     if (initValuesOrLinkedState instanceof State) {
       const initState = initValuesOrLinkedState.get()
       const init = {}
       inputs.forEach(([path]) => setByPath(init, path, getByPath(initState, path)))
-      super(parent, init as StateFromInputTree<T>, stateOptions)
+      super(init as StateFromInputTree<T>)
       this.configureInputs(this, inputs)
       this.onValueChange((newState) => {
         if (validate && !validate(newState)) {
@@ -366,9 +413,10 @@ export class FormState<
         initValuesOrLinkedState.update(newState)
       })
     } else {
-      super(parent, initValuesOrLinkedState, stateOptions)
+      super(initValuesOrLinkedState)
       if (validate) {
-        const validInputValuesState = this.createState(initValuesOrLinkedState, { name: 'valid input values' })
+        const validInputValuesState = this.createState({ value: initValuesOrLinkedState })
+        validInputValuesState.options.name = 'valid input values'
         validInputValuesState.onValueChange((newState) => {
           if (!validate(newState)) {
             return
@@ -382,7 +430,7 @@ export class FormState<
     }
   }
 
-  private configureInputs(inputState: State<StateFromInputTree<T>>, inputs: PathTuple[]) {
+  private configureInputs(inputState: State<StateFromInputTree<T>, StateFromInputTree<T>>, inputs: PathTuple[]) {
     for (const [path, input] of inputs) {
       const state = inputState.get()
       const value = getByPath(state, path)
