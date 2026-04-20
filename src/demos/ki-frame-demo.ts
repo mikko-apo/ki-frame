@@ -1,6 +1,6 @@
 import { createController, getDefaultContext } from '..'
 import { br, button, div, hr, input, pre, setElementToId, table, td, tr } from '../domBuilder'
-import { domBuilderWithState } from './01_domBuilderStateDemo'
+import { domBuilderAndState } from './01_domBuilderStateDemo'
 import { fetchDemo } from './02_fetchDemo'
 import { createFormStateDemo } from './03_formDemo'
 import { channelsDemo } from './channelsDemo'
@@ -17,7 +17,7 @@ interface Demo {
 const demo = (title: string, fn: () => HTMLElement) => ({ title, fn })
 
 const demos: Demo[] = [
-  demo('testable counter', domBuilderWithState),
+  demo('testable counter', domBuilderAndState),
   demo('fetch examples', fetchDemo),
   demo('form handling with createFormState', createFormStateDemo),
   demo('counter(), naive 2010 DOM node version', basicCounter),

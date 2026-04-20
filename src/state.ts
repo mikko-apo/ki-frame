@@ -1,5 +1,5 @@
 import { Channel, type Unsub, type UnwrapMaybeTuple } from './channel'
-import type { ErrorResponse, FetchOptions } from './fetch'
+import type { FetchOptions } from './fetch'
 import { collectFormsInputs, type PathTuple, readRaw, type StateFromInputTree } from './form'
 import {
   type CallbackInfo,
@@ -14,14 +14,27 @@ import { getId } from './util/objectIdCounter'
 import { copyAndSet, setByPath } from './util/setByPath'
 import { DestroyableSet } from './util/strongOrWeakSet'
 import { isDefined } from './util/typeUtils'
+import type { StandardSchemaV1 } from './util/standardSchema'
+import { schemaValidate } from './util/standardSchemaUtil'
 
 function shallowEqual(a: unknown, b: unknown) {
   return a === b
 }
 
-export interface StateOptions {
+export interface ControllerOptions {
   name?: string
   weakRef?: boolean
+  parent?: Context
+}
+
+type OnValidationFailure = (failure: StandardSchemaV1.FailureResult) => void
+
+export interface StateParams<ValueOrInput, Value = ValueOrInput> extends ControllerOptions {
+  value?: Value
+  reducer?: StateReducer<ValueOrInput, Value>
+  schema?: StandardSchemaV1<unknown, Value>
+  onValidateFailure?: OnValidationFailure
+  debounce?: boolean
 }
 
 type ControllerDefaultEventShapes = [Readonly<{ type: 'updateUi' }>]
@@ -47,9 +60,8 @@ export class Context implements Destroyable {
   public parent?: Context
   constructor(public readonly controllers = new DestroyableSet<Context>('weak')) {}
 
-  createController() {
-    const controller = new Controller()
-    controller.parent = this
+  createController(options?: ControllerOptions) {
+    const controller = new Controller(options)
     this.controllers.add(controller)
     return controller
   }
@@ -61,7 +73,6 @@ export class Context implements Destroyable {
   createState<Value>(): State<Value, Value | undefined>
   createState<ValueOrInput, Value>(params?: StateParams<ValueOrInput, Value>): State<ValueOrInput, Value> {
     const state = new State(params)
-    state.parent = this
     this.controllers.add(state)
     return state
   }
@@ -86,7 +97,7 @@ export class Context implements Destroyable {
 }
 
 export class Controller extends Context {
-  public options: Required<StateOptions> = { name: 'controller', weakRef: false }
+  public options: Required<Omit<ControllerOptions, 'parent'>>
   private _destroyed = false
   private outputChannel?: Channel<ControllerDefaultEventShapes>
   private registeredSources = new DestroyableSet<TimeoutDestroyable | FetchDestroyable<any>>()
@@ -95,8 +106,10 @@ export class Controller extends Context {
   private eventSources: EventSource<any>[] = []
   private id = getId()
 
-  constructor() {
+  constructor({ name = 'controller', weakRef = false, parent }: ControllerOptions = {}) {
     super()
+    this.parent = parent
+    this.options = { name, weakRef }
   }
 
   private getOutputChannel() {
@@ -262,8 +275,7 @@ export class Controller extends Context {
     const maybeOkResponse = assertOk
       ? response.then((response: Response): Response => {
           if ((typeof assertOk === 'function' && assertOk(response) === false) || !response.ok) {
-            const cause: ErrorResponse = { errorResponse: response }
-            throw cause
+            throw { errorResponse: response }
           }
           return response
         })
@@ -292,14 +304,6 @@ export class Controller extends Context {
 }
 type StateReducer<Input, Value> = (obj: Input, cur: Value) => Value | typeof State.Never
 
-export interface StateParams<ValueOrInput, Value = ValueOrInput> {
-  value?: Value
-  reducer?: StateReducer<ValueOrInput, Value>
-  name?: string
-  parent?: Context
-  debounce?: boolean
-}
-
 export type OnValueChangeParams = { noInit?: boolean }
 
 export interface StateListener<Value> {
@@ -307,17 +311,27 @@ export interface StateListener<Value> {
 }
 
 export class State<ValueOrInput, Value = ValueOrInput> extends Controller implements StateListener<Value> {
-  public static readonly Never = Symbol('WritableState.Never')
+  public static readonly Never = Symbol('State.Never')
   private value?: Value
-  private mapFn?: (source: ValueOrInput, cur: Value) => Value | typeof State.Never
+  private readonly mapFn?: (source: ValueOrInput, cur: Value) => Value | typeof State.Never
   private onChange?: Channel<[Readonly<Value>, Readonly<Value>]>
+  protected readonly schema?: StandardSchemaV1<unknown, Value>
+  private readonly onValidateFailure?: OnValidationFailure
 
-  constructor(params?: StateParams<ValueOrInput, Value>) {
-    super()
-    this.options.name = params?.name ?? 'state'
-    this.value = params?.value
-    this.parent = params?.parent
-    this.mapFn = params?.reducer
+  constructor({
+    name = 'state',
+    weakRef = false,
+    value,
+    parent,
+    reducer,
+    schema,
+    onValidateFailure,
+  }: StateParams<ValueOrInput, Value> = {}) {
+    super({ name, weakRef, parent })
+    this.value = value
+    this.mapFn = reducer
+    this.schema = schema
+    this.onValidateFailure = onValidateFailure
   }
 
   get(): Value {
@@ -332,33 +346,53 @@ export class State<ValueOrInput, Value = ValueOrInput> extends Controller implem
     return this.onChange
   }
 
-  set(newObj: ValueOrInput | typeof State.Never | ((cur: Value) => ValueOrInput | typeof State.Never)) {
+  set(
+    valueOrInputOrFn: ValueOrInput | typeof State.Never | ((cur: Value) => ValueOrInput | typeof State.Never),
+    onValidateFailure?: OnValidationFailure
+  ) {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot set() value'))
     const old = this.value
-    const finalObj: Value | ValueOrInput | typeof State.Never =
-      typeof newObj === 'function'
-        ? (newObj as (cur: Value) => ValueOrInput | typeof State.Never)(this.value as Value)
-        : newObj
-    if (finalObj === State.Never) return
-    const value = this.mapFn ? this.mapFn(finalObj as ValueOrInput, this.value as Value) : finalObj
-    if (value !== State.Never && !shallowEqual(old, finalObj)) {
-      this.value = value as Value
-      this.getOnChange().publish(this.value, old ? old : (finalObj as any as Value))
+    const value: Value | ValueOrInput | typeof State.Never =
+      typeof valueOrInputOrFn === 'function'
+        ? (valueOrInputOrFn as (cur: Value) => ValueOrInput | typeof State.Never)(this.value as Value)
+        : valueOrInputOrFn
+    if (value === State.Never) return
+    const mappedValue = this.mapFn ? this.mapFn(value as ValueOrInput, this.value as Value) : value
+    if (mappedValue !== State.Never && !shallowEqual(old, mappedValue)) {
+      const setAndPublish = () => {
+        this.value = mappedValue as Value
+        this.getOnChange().publish(this.value, old ? old : (mappedValue as any as Value))
+      }
+      if (this.schema) {
+        schemaValidate(this.schema, mappedValue, setAndPublish, (failure) => {
+          this.onValidateFailure?.(failure)
+          onValidateFailure?.(failure)
+        })
+      } else {
+        setAndPublish()
+      }
     }
   }
 
   update(
-    update: Value | typeof State.Never | Partial<Value> | ((cur: Value) => Value | Partial<Value> | typeof State.Never)
+    partialValueOrInputOrFn:
+      | Value
+      | typeof State.Never
+      | Partial<Value>
+      | ((cur: Value) => Value | Partial<Value> | typeof State.Never),
+    onValidateFailure?: OnValidationFailure
   ) {
     if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
     if (this.value === undefined) throw new Error(this.idTxt('State is undefined. Can not update() value'))
     if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
     if (this.mapFn !== undefined)
       throw new Error(this.idTxt("State({reducer:fn()}) function is defined. Don't call state.update()"))
-    const finalUpdate =
-      typeof update === 'function' ? (update as (cur: Value) => Value | Partial<Value>)(this.value) : update
-    if (finalUpdate === State.Never) return
-    this.set({ ...(this.value as ValueOrInput), ...finalUpdate })
+    const updateObject =
+      typeof partialValueOrInputOrFn === 'function'
+        ? (partialValueOrInputOrFn as (cur: Value) => Value | Partial<Value>)(this.value)
+        : partialValueOrInputOrFn
+    if (updateObject === State.Never) return
+    this.set({ ...(this.value as ValueOrInput), ...updateObject }, onValidateFailure)
   }
 
   onValueChange(cb: (obj: Value, old?: Value) => void, params?: OnValueChangeParams): Unsub {

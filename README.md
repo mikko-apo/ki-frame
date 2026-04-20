@@ -1,8 +1,7 @@
 **ki-frame**
 
 ki-frame is a lightweight, all-in-one framework for building browser applications without abstracting the DOM away.
-It provides an API layer that works with native browser APIs, offering structure where needed while keeping the platform
-fully accessible. It simplifies common patterns while maintaining direct interaction with native features.
+It provides modern tools while maintaining direct interaction with native features.
 
 **note**: ki-frame is in active development and very unstable, so don't use it yet.
 
@@ -40,57 +39,110 @@ A concise, expressive utility for constructing and managing DOM trees:
 - Extended API for listeners `events()` and inline `styles()` and classes
 
 ```typescript
-p('Click this text to update counter', {
-  styles: {
-    color: 'red',
-  },
-  events: {
-    click() {
-      state.set((cur) => ({ total: cur.total + 1 }))
+const showInfo = false
+div(
+  p('Click this text to update counter', {
+    styles: {
+      color: 'red',
     },
-  },
-})
+    events: {
+      click() {
+        state.set((cur) => ({ total: cur.total + 1 }))
+      },
+    },
+  }),
+  showInfo && 'Text node with more information',
+  ul([1, 2, 3].map((i) => li(i)))
+)
 ```
 
-More information:
-
-- documentation: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
-- code:
-  - [domBuilder.ts](src/domBuilder.ts)
-  - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
-  - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
+More information: [Use fluent syntax for DOM trees](#use-fluent-syntax-for-dom-trees)
 
 ## State
 
-**State** is the central mechanism of ki-frame. It unifies application logic and resource, state and event management
-into a coherent model.
+**State** is a central concept in ki-frame. It:
 
-**State connects all the browser side components and app logic together**:
+- stores state value and provides `.get()`, `.set()`, `.patch()`
+  - supports listeners with `.onValueChange()`
+  - also supports reducer kind of action based mutations
+- supports managed tear down with `.destroy()` and `.onDestroy()`
+  - unsubscribes DOM event listeners
+  - `fetch()`, Promise and `.setTimeout()` aborts
+  - can propagate the .destroy() to other connected states
+-
 
-- Manages dom node event listeners, fetches, ...
-- Maintains application structure and supports inspection and monitoring
-- Provides a unified model for:
-  - Working with DOM and browser APIs
-  - Sharing state value and events across components/states (wip 🛠️)
-    - States can be connected by hierarchy, state value and/or event propagation
-    - Dispatching lifecycle events (`updateUi`, `destroy`, `stateChanged`)
-    - Working with multiple connected states.
+Here's example state code of a shared state:
 
-**State provides multiple strategies and tools for cleanup and lifecycle control**
+```typescript
+const createNodes = (state: State<{ total: number }>) => {
+  const info = text()
+  state.onValueChange((obj) => {
+    info.nodeValue = `Counter: ${obj.total}`
+  })
+  return div(
+    p('Click this text to update counter', {
+      events: {
+        click() {
+          state.set((cur) => ({ total: cur.total + 1 }))
+        },
+      },
+    }),
+    info
+  )
+}
 
-- Local lifetimes
-  - When a state is connected with a root DOM node and not shared externally, garbage collection can reclaim resources
-    automatically
-- Resource registration
-  - DOM nodes, event listeners, fetches, and timeouts can be registered; all associated resources are released when
-    `state.destroy()` is invoked
-- Manual destruction
-  - `state.destroy()` can be called by any code with refence to the state
-- Linked states & cascading destruction
-  - states can be linked together, when rootState.destroy() is called all linked states are destroyed
-- `state.onRemoveDestroy(node)`
-  - Automatically triggers `state.destroy()` when a linked DOM node is removed from DOM tree
-- WeakRef-based fine-grained resource and link management
+function counter(state = createState({ value: { total: 0 } })) {
+  return div(
+    createNodes(state),
+    button(
+      'Reset',
+      events({
+        click() {
+          state.set({ total: 0 })
+        },
+      })
+    )
+  )
+}
+```
+
+Here's more `onValueChange()` related patterns:
+
+```typescript
+// update values by rerendering full content
+const priceChangeTBody = tbody()
+calculatedValuesState.onValueChange(({ bills }) => {
+  const rows = bills.map((bill) => tr())
+  replaceChildren(priceChangeTBody, rows)
+})
+const t = table(priceChangeTBody)
+
+// for a more finegrained per cell update, add listener per cell
+const billTd = td()
+calculatedValuesState.onValueChange(({ bills }) => {
+  replaceChildren(billTd, billSummary(getBill(bills, index)))
+})
+
+// make a view that toggles from viewing to editable
+const usedPowerEditable = createState({ value: false })
+// render input and text based on
+usedPowerEditable.onValueChange((showInput) => {
+  usedPowerInput.hidden = !showInput
+  usedPowerTextDiv.hidden = showInput
+})
+```
+
+States can be connected together:
+
+```typescript
+// state.map produces a second automatically updated state
+// mutable state value that contains power usage values by month
+const powerUsageState = createState({ value: powerUsage })
+// values calculated from powerUsage, for each change
+const calculatedValuesState = powerUsageState.map((powerUsage) =>
+  calculateValues(years, monthlyPricing, powerUsage.numbers)
+)
+```
 
 More information:
 
@@ -192,7 +244,10 @@ setElementToId('app', div(root, info))
 Checkout
 
 - the more indepth demo at the demo site: https://mikko-apo.github.io/ki-frame#domBuilder
-- source code [domBuilder.ts](src/domBuilder.ts)
+- code:
+  - [domBuilder.ts](src/domBuilder.ts)
+  - [domBuilderExtension.ts](src/domBuilderStyles.ts) css()
+  - [domBuilderEvents.ts](src/domBuilderEvents.ts) events()
 
 ## Use createState()
 
@@ -424,7 +479,6 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 **Planned**
 
 - state
-  - State.merge(sources, config: {})
   - logging of relevant things via context
   - unified model for sharing data, event signalling
     - to linked/child states
@@ -518,6 +572,22 @@ exports[`Example tests > connected counter() and root.click() 2`] = `
 **Bubbling under**
 
 - state
+  - automatic updates between states
+    - State.merge(sources, config: {})
+    - clarify if state updating should support multiple input types or should state have single update mechanism
+      - single input type per state instance would make it more clear on how value is updated
+        - multiple updaters can still clash with single input type
+      - multiple input types would be more flexible as the single state could be shared
+      - time aspect, do different updaters have different needs over time
+      - mega state that holds everything vs
+    - clarify how reducer/map should work with set() and update()
+      - Currently set() is dual role. without reduder and with reducer
+        - without reducer set just sets the value
+        - with reducer can work as both map() and reducer: set(inputObjectAsAction) -> state.value = reducer(inputObjectAsAction, state.value)
+          - update(partialObject) is prevented as it's not clear if reducer/map-function should be applied to possibly partial inputObject
+      - solutions:
+        - state only modifiable by a single input: separate State (set, patch) and MappedState
+        - state only modifiable byy multiple inputs, shared state for different inputs: const r = state.reducer
   - propagation of refresh() and destroy() using a similar mechanism, maybe runtime parameter
     - state.refresh("all"|"linked"|"this")
     - state.destroy("all"|"linked"|"this")

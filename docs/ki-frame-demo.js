@@ -347,6 +347,23 @@
     return item !== void 0 && item !== null
   }
 
+  // src/util/standardSchemaUtil.ts
+  function schemaValidate(schema, obj, processValue, onValidateFailure) {
+    const checkResult = (result) => {
+      if (result.issues) {
+        onValidateFailure == null ? void 0 : onValidateFailure(result)
+      } else {
+        processValue(result.value)
+      }
+    }
+    const maybePromise = schema['~standard'].validate(obj)
+    if (maybePromise instanceof Promise) {
+      maybePromise.then(checkResult)
+    } else {
+      checkResult(maybePromise)
+    }
+  }
+
   // src/state.ts
   function shallowEqual(a2, b2) {
     return a2 === b2
@@ -355,15 +372,13 @@
     constructor(controllers = new DestroyableSet('weak')) {
       this.controllers = controllers
     }
-    createController() {
-      const controller = new Controller()
-      controller.parent = this
+    createController(options) {
+      const controller = new Controller(options)
       this.controllers.add(controller)
       return controller
     }
     createState(params) {
       const state = new State(params)
-      state.parent = this
       this.controllers.add(state)
       return state
     }
@@ -380,15 +395,16 @@
     }
   }
   var Controller = class extends Context {
-    constructor() {
+    constructor({ name = 'controller', weakRef = false, parent } = {}) {
       super()
-      this.options = { name: 'controller', weakRef: false }
       this._destroyed = false
       this.registeredSources = new DestroyableSet()
       this.onDestroyListeners = new DestroyableSet()
       this.linkedStates = /* @__PURE__ */ new Set()
       this.eventSources = []
       this.id = getId()
+      this.parent = parent
+      this.options = { name, weakRef }
     }
     getOutputChannel() {
       if (!isDefined(this.outputChannel)) {
@@ -528,8 +544,7 @@
       const maybeOkResponse = assertOk
         ? response.then((response2) => {
             if ((typeof assertOk === 'function' && assertOk(response2) === false) || !response2.ok) {
-              const cause = { errorResponse: response2 }
-              throw cause
+              throw { errorResponse: response2 }
             }
             return response2
           })
@@ -551,13 +566,12 @@
     }
   }
   var _State = class _State extends Controller {
-    constructor(params) {
-      var _a2
-      super()
-      this.options.name = (_a2 = params == null ? void 0 : params.name) != null ? _a2 : 'state'
-      this.value = params == null ? void 0 : params.value
-      this.parent = params == null ? void 0 : params.parent
-      this.mapFn = params == null ? void 0 : params.reducer
+    constructor({ name = 'state', weakRef = false, value, parent, reducer, schema, onValidateFailure } = {}) {
+      super({ name, weakRef, parent })
+      this.value = value
+      this.mapFn = reducer
+      this.schema = schema
+      this.onValidateFailure = onValidateFailure
     }
     get() {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot get value'))
@@ -569,26 +583,38 @@
       }
       return this.onChange
     }
-    set(newObj) {
+    set(valueOrInputOrFn, onValidateFailure) {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot set() value'))
       const old = this.value
-      const finalObj = typeof newObj === 'function' ? newObj(this.value) : newObj
-      if (finalObj === _State.Never) return
-      const value = this.mapFn ? this.mapFn(finalObj, this.value) : finalObj
-      if (value !== _State.Never && !shallowEqual(old, finalObj)) {
-        this.value = value
-        this.getOnChange().publish(this.value, old ? old : finalObj)
+      const value = typeof valueOrInputOrFn === 'function' ? valueOrInputOrFn(this.value) : valueOrInputOrFn
+      if (value === _State.Never) return
+      const mappedValue = this.mapFn ? this.mapFn(value, this.value) : value
+      if (mappedValue !== _State.Never && !shallowEqual(old, mappedValue)) {
+        const setAndPublish = () => {
+          this.value = mappedValue
+          this.getOnChange().publish(this.value, old ? old : mappedValue)
+        }
+        if (this.schema) {
+          schemaValidate(this.schema, mappedValue, setAndPublish, (failure) => {
+            var _a2
+            ;(_a2 = this.onValidateFailure) == null ? void 0 : _a2.call(this, failure)
+            onValidateFailure == null ? void 0 : onValidateFailure(failure)
+          })
+        } else {
+          setAndPublish()
+        }
       }
     }
-    update(update) {
+    update(partialValueOrInputOrFn, onValidateFailure) {
       if (this.destroyed) throw new Error(this.idTxt('State destroyed. Cannot update() value'))
       if (this.value === void 0) throw new Error(this.idTxt('State is undefined. Can not update() value'))
       if (typeof this.value !== 'object') throw new Error(this.idTxt('State is not an object. Can not update() value'))
       if (this.mapFn !== void 0)
         throw new Error(this.idTxt("State({reducer:fn()}) function is defined. Don't call state.update()"))
-      const finalUpdate = typeof update === 'function' ? update(this.value) : update
-      if (finalUpdate === _State.Never) return
-      this.set({ ...this.value, ...finalUpdate })
+      const updateObject =
+        typeof partialValueOrInputOrFn === 'function' ? partialValueOrInputOrFn(this.value) : partialValueOrInputOrFn
+      if (updateObject === _State.Never) return
+      this.set({ ...this.value, ...updateObject }, onValidateFailure)
     }
     onValueChange(cb, params) {
       if (this.destroyed) throw new Error(this.idTxt('Cannot subscribe to destroyed state'))
@@ -611,7 +637,7 @@
       return state
     }
   }
-  _State.Never = Symbol('WritableState.Never')
+  _State.Never = Symbol('State.Never')
   var State = _State
   var FormState = class extends State {
     constructor(t, initValuesOrLinkedState, options) {
@@ -1040,12 +1066,15 @@
   }
 
   // src/demos/01_domBuilderStateDemo.ts
-  function domBuilderWithState() {
+  function domBuilderAndState() {
     const createNodes = (state) => {
       const info = text()
-      const root = p(
-        'Click this text to update counter',
-        {
+      state.onValueChange((obj) => {
+        info.nodeValue = `Counter: ${obj.total}`
+      })
+      const showInfo = false
+      return div(
+        p('Click this text to update counter', {
           styles: {
             color: 'red',
           },
@@ -1054,16 +1083,15 @@
               state.set((cur) => ({ total: cur.total + 1 }))
             },
           },
-        },
-        div(info, styles({ color: 'green' }))
+        }),
+        info,
+        showInfo && 'Text node with more information',
+        ul([1, 2, 3].map((i2) => li(i2))),
+        styles({ color: 'green' })
       )
-      state.onValueChange((obj) => {
-        info.nodeValue = `Counter: ${obj.total}`
-      })
-      return root
     }
     function counter(state = createState({ value: { total: 0 } })) {
-      const root = createNodes(state)
+      const c = createNodes(state)
       const reset = button(
         'Reset',
         events({
@@ -1072,8 +1100,7 @@
           },
         })
       )
-      state.updateUi()
-      return div(root, reset)
+      return div({ class: 'counter' }, c, reset)
     }
     return counter()
   }
@@ -1281,7 +1308,7 @@
   // src/demos/ki-frame-demo.ts
   var demo = (title2, fn) => ({ title: title2, fn })
   var demos = [
-    demo('testable counter', domBuilderWithState),
+    demo('testable counter', domBuilderAndState),
     demo('fetch examples', fetchDemo),
     demo('form handling with createFormState', createFormStateDemo),
     demo('counter(), naive 2010 DOM node version', basicCounter),
