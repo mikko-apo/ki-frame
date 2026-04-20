@@ -80,31 +80,30 @@ describe('State', () => {
       expect(() => state.set({ c: 1 })).toThrow(/State destroyed\. Cannot set\(\) value/)
     })
 
-    it('applies the map function for mapped states', () => {
-      const mapped = createState({ value: { c: 1 } }).map((obj) => ({ c: obj.c * 2 }))
+    it('applies the map function when the source state updates', () => {
+      const state = createState({ value: { c: 1 } })
+      const mapped = state.map((obj) => ({ c: obj.c * 2 }))
       const listener = vi.fn()
 
       mapped.onValueChange(listener, { noInit: true })
-      mapped.set({ c: 3 })
+      state.set({ c: 3 })
 
       expect(mapped.get()).toEqual({ c: 6 })
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith({ c: 6 }, { c: 2 })
     })
 
-    it('supports reducer-style actions with createState({ value, reducer })', () => {
-      const state = createState({
-        value: { total: 1 },
-        reducer: (action: { type: 'add'; value: number } | { type: 'reset' }, cur) => {
-          if (action.type === 'reset') return { total: 0 }
-          return { total: cur.total + action.value }
-        },
+    it('supports reducer-style actions with state.reducer()', () => {
+      const state = createState<{ total: number }>()
+      const dispatch = state.reducer((action: { type: 'add'; value: number } | { type: 'reset' }, cur) => {
+        if (action.type === 'reset') return { total: 0 }
+        return { total: cur.total + action.value }
       })
       const listener = vi.fn()
 
       state.onValueChange(listener)
-      state.set({ type: 'add', value: 2 })
-      state.set({ type: 'add', value: 5 })
+      dispatch({ type: 'add', value: 2 })
+      dispatch({ type: 'add', value: 5 })
 
       expect(state.get()).toEqual({ total: 8 })
       expect(listener).toHaveBeenCalledTimes(3)
@@ -114,11 +113,12 @@ describe('State', () => {
     })
 
     it('does not emit when a mapped state map function returns State.Never', () => {
-      const mapped = createState({ value: { c: 1 } }).map(() => State.Never)
+      const state = createState({ value: { c: 1 } })
+      const mapped = state.map(() => State.Never)
       const listener = vi.fn()
 
       mapped.onValueChange(listener, { noInit: true })
-      mapped.set({ c: 3 })
+      state.set({ c: 3 })
 
       expect(mapped.get()).toBeUndefined()
       expect(listener).not.toHaveBeenCalled()
@@ -257,14 +257,16 @@ describe('State', () => {
       expect(listener).not.toHaveBeenCalled()
     })
 
-    it('throws when the state has a map function', () => {
+    it('updates mapped state values directly', () => {
       const state = createState({ value: { a: 1 } }).map((obj) => ({ a: obj.a + 1 }))
       const listener = vi.fn()
 
       state.onValueChange(listener, { noInit: true })
+      state.update({ a: 2 })
 
-      expect(() => state.update({ a: 2 })).toThrow(/Don't call state\.update/)
-      expect(listener).not.toHaveBeenCalled()
+      expect(state.get()).toEqual({ a: 2 })
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({ a: 2 }, { a: 2 })
     })
 
     it('throws when called after destroy', () => {
