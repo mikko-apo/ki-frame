@@ -71,6 +71,38 @@ Following approaches create references that can't be GCed, avoid:
 
 # Work in progress below this topic
 
+## State outdated documentation
+
+It unifies application logic and resource, state and event management
+into a coherent model.
+
+**State connects all the browser side components and app logic together**:
+
+- Manages dom node event listeners, fetches, ...
+- Maintains application structure and supports inspection and monitoring
+- Provides a unified model for:
+  - Working with DOM and browser APIs
+  - Sharing state value and events across components/states (wip 🛠️)
+    - States can be connected by hierarchy, state value and/or event propagation
+    - Dispatching lifecycle events (`updateUi`, `destroy`, `stateChanged`)
+    - Working with multiple connected states.
+
+**State provides multiple strategies and tools for cleanup and lifecycle control**
+
+- Local lifetimes
+  - When a state is connected with a root DOM node and not shared externally, garbage collection can reclaim resources
+    automatically
+- Resource registration
+  - DOM nodes, event listeners, fetches, and timeouts can be registered; all associated resources are released when
+    `state.destroy()` is invoked
+- Manual destruction
+  - `state.destroy()` can be called by any code with refence to the state
+- Linked states & cascading destruction
+  - states can be linked together, when rootState.destroy() is called all linked states are destroyed
+- `state.onRemoveDestroy(node)`
+  - Automatically triggers `state.destroy()` when a linked DOM node is removed from DOM tree
+- WeakRef-based fine-grained resource and link management
+
 ## State broadcast events
 
 - **valueChange**

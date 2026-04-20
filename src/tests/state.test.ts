@@ -1,5 +1,10 @@
+import { z } from 'zod'
 import { describe, expect, it, vi } from 'vitest'
 import { createState, State } from '..'
+
+const valueSchema = z.object({
+  value: z.number(),
+})
 
 describe('State', () => {
   describe('get()', () => {
@@ -142,6 +147,55 @@ describe('State', () => {
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(2, 2)
     })
+
+    it('accepts a direct value when schema validation passes', () => {
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.set({ value: 2 })
+
+      expect(state.get()).toEqual({ value: 2 })
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({ value: 2 }, { value: 1 })
+    })
+
+    it('keeps the current value when schema validation fails without onValidateFailure', () => {
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.set({ value: 'x' } as any)
+
+      expect(state.get()).toEqual({ value: 1 })
+      expect(listener).not.toHaveBeenCalled()
+    })
+
+    it('calls onValidateFailure and keeps the current value when set validation fails', () => {
+      const onValidateFailure = vi.fn()
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+        onValidateFailure,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.set({ value: 'x' } as any)
+
+      expect(state.get()).toEqual({ value: 1 })
+      expect(listener).not.toHaveBeenCalled()
+      expect(onValidateFailure).toHaveBeenCalledTimes(1)
+      expect(onValidateFailure.mock.calls[0]?.[0]).toMatchObject({
+        issues: [expect.objectContaining({ message: expect.any(String) })],
+      })
+    })
   })
 
   describe('update()', () => {
@@ -222,6 +276,55 @@ describe('State', () => {
 
       expect(() => state.update({ a: 2 })).toThrow(/State destroyed\. Cannot update\(\) value/)
       expect(listener).not.toHaveBeenCalled()
+    })
+
+    it('accepts a merged value when schema validation passes', () => {
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.update({ value: 2 })
+
+      expect(state.get()).toEqual({ value: 2 })
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({ value: 2 }, { value: 1 })
+    })
+
+    it('keeps the current value when merged update fails schema validation without onValidateFailure', () => {
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.update({ value: 'x' } as any)
+
+      expect(state.get()).toEqual({ value: 1 })
+      expect(listener).not.toHaveBeenCalled()
+    })
+
+    it('calls onValidateFailure and keeps the current value when update validation fails', () => {
+      const onValidateFailure = vi.fn()
+      const state = createState({
+        value: { value: 1 },
+        schema: valueSchema,
+        onValidateFailure,
+      })
+      const listener = vi.fn()
+
+      state.onValueChange(listener, { noInit: true })
+      state.update({ value: 'x' } as any)
+
+      expect(state.get()).toEqual({ value: 1 })
+      expect(listener).not.toHaveBeenCalled()
+      expect(onValidateFailure).toHaveBeenCalledTimes(1)
+      expect(onValidateFailure.mock.calls[0]?.[0]).toMatchObject({
+        issues: [expect.objectContaining({ message: expect.any(String) })],
+      })
     })
   })
 
